@@ -1,6 +1,6 @@
 # Plan: zentrale Bluetooth-Infrastruktur in `ioBroker.ble`
 
-Status: Entwurf · Stand 2026-11-05
+Status: Entwurf · Stand 2026-11-10
 
 Ziel: `ioBroker.ble` wird die zentrale BLE-Schicht für ioBroker. Er stellt mehrere Empfänger (ESPHome-Bluetooth-Proxies, lokaler Dongle) bereit, macht aktive GATT-Verbindungen möglich und bietet anderen Adaptern eine API. Der konkrete Anlass sind pvvx-Thermometer ([ATC_MiThermometer](https://github.com/pvvx/ATC_MiThermometer)), deren Uhrzeit automatisch synchronisiert werden soll (inklusive Sommer-/Winterzeit) und auf die Firmware-Updates ausgerollt werden sollen.
 
@@ -10,7 +10,7 @@ Grundsätze aus der Vorab-Diskussion:
 - **Transport und Protokoll bleiben getrennt.** Die Transportschicht weiß nicht, was ein pvvx-Thermometer ist.
 - **Ausschließlich für ioBroker.** Es gibt keinen externen Daemon und kein eigenes Netzwerkprotokoll.
 - **Kein eigenes ESP32-Protokoll.** Wir verwenden die ESPHome Native API.
-- **Der Adapter [`ioBroker.esphome`](https://github.com/DrozmotiX/ioBroker.esphome) hält die Verbindung zum ESP.** Er hat die API-Verbindung (inklusive Verschlüsselungs-Key, Discovery und Reconnect) und **leitet den Bluetooth-Proxy-Teil an `ble` weiter**. `ble` spricht selbst keine ESPHome Native API.
+- **`ble` kennt keine anderen Adapter.** Er stellt eine generische Gateway-Schnittstelle bereit. Adapter, die BLE-Pakete empfangen, liefern sie dort von sich aus ab. Der erste ist [`ioBroker.esphome`](https://github.com/DrozmotiX/ioBroker.esphome): Er hält weiterhin die Verbindung zum ESP (Key, Discovery, Reconnect) und schickt die Bluetooth-Pakete an `ble`.
 
 ---
 
@@ -46,13 +46,14 @@ Wichtige Beobachtungen:
                        │  scanner/          Advertisement-Fan-out, Dedupe, Drosselung   │
                        │     │                                                          │
                        │  transports/       Transport-Interface                         │
-                       │   ├─ esphome-bridge/ Bridge zu esphome.X (sendTo, s. §4a)      │
+                       │   ├─ remote-gateway/ von anderen Adaptern gelieferte Gateways  │
                        │   ├─ noble-local/  bestehender Kindprozess (Scan)              │
                        │   └─ noble-remote/ bestehender TCP-Client (`server`)           │
-                       └──────────────┬─────────────────────────────────────────────────┘
-                                      │ sendTo  (Vertrag „ble-bridge/1“, §4a)
-                       ┌──────────────▼──────── ioBroker.esphome ───────────────────────┐
-                       │  bluetooth-bridge/  Abo-Verwaltung, Weiterleitung, Leases      │
+                       └──────────────▲─────────────────────────────────────────────────┘
+                                      │ sendTo an ble.0: Pakete abliefern (§4a)
+                                      │ (Rückweg nur für GATT-Befehle)
+                       ┌──────────────┴──────── ioBroker.esphome ───────────────────────┐
+                       │  ble-forwarder/     Pakete bündeln und an ble.0 schicken       │
                        │  bestehend:         Geräteverwaltung, Keys, Reconnect          │
                        │                     @2colors/esphome-native-api                │
                        └──────────────┬─────────────────────────────────────────────────┘
@@ -63,7 +64,7 @@ Wichtige Beobachtungen:
 ### 2.1 Kernentscheidungen
 
 **E1: Transport-Interface statt eines festen Scanners.**
-Jede Quelle implementiert dasselbe Interface (siehe Abschnitt 3). Die bisherigen Varianten „lokaler Kindprozess“ und „TCP-Server“ werden die ersten beiden Implementierungen, ohne Funktionsänderung. Die Bridge zum `esphome`-Adapter kommt als dritte hinzu. Jeder weitergeleitete ESP erscheint dabei als **eigenes Gateway** (`esphome.0:proxy-og`), damit Registry und Connection Manager einzelne Proxies unterscheiden können. Mehrere Transporte können gleichzeitig aktiv sein, zum Beispiel ein lokaler Dongle und drei Proxies.
+Jede Quelle implementiert dasselbe Interface (siehe Abschnitt 3). Die bisherigen Varianten „lokaler Kindprozess“ und „TCP-Server“ werden die ersten beiden Implementierungen, ohne Funktionsänderung. Als dritte kommt `remote-gateway` hinzu: Gateways, die andere Adapter über die Gateway-Schnittstelle (§4a) liefern. Jeder ESP erscheint dabei als **eigenes Gateway** (`esphome.0:proxy-og`), damit Registry und Connection Manager einzelne Proxies unterscheiden können. Mehrere Transporte können gleichzeitig aktiv sein, zum Beispiel ein lokaler Dongle und drei Proxies.
 
 **E2: Ein neutrales Advertisement-Modell, die Decoder bleiben unverändert.**
 `PeripheralInfo` wird ein eigener Typ, nicht mehr ein `Pick<noble.Peripheral>`. Er hat dieselben Felder (`address`, `addressType`, `rssi`, `advertisement.{localName, serviceData[], manufacturerData, serviceUuids}`) plus `gatewayId`. Der `esphome`-Adapter leitet die **rohen AD-Bytes** weiter, ohne sie zu interpretieren. Das Parsen übernimmt `ble` mit einem **AD-Struktur-Parser** (`lib/ad-parser.ts`), der dieselbe Form erzeugt wie noble. Damit funktionieren Xiaomi, BTHome, Ruuvi und `_default` ohne Änderung, und das Bluetooth-Wissen bleibt in `ble`.
@@ -81,24 +82,26 @@ Pro MAC-Adresse speichert die Registry `{ gateways: Map<gatewayId, { rssi, lastS
 - Ein Session-Objekt kapselt `discoverServices`, `read`, `write(withResponse)`, `subscribe(notify)` und `close`. Wer es nutzt, sieht nie, welcher Transport dahintersteht.
 
 **E5: Gerätelogik läuft im Adapter (`drivers/`). Die externe API ist zusätzlich da, nicht der Hauptweg.**
-Ein pvvx-OTA-Update dauert laut pvvx etwa 4 Minuten und besteht aus Tausenden kleinen Writes. Die Gerätelogik kommt deshalb als **Driver** in `ble`, analog zu den Decoder-Plugins, und nicht in Fremdadapter, die jeden Schritt per `sendTo` anstoßen. Weil der Weg zum ESP jetzt aber selbst über `sendTo` zum `esphome`-Adapter führt, braucht die Bridge eine **Sammel-Schreiboperation** (`bt:writeSequence`, siehe 4a). Damit läuft nicht jeder 20-Byte-Write einzeln durch die States-DB. Die `sendTo`-API (Abschnitt 4) bleibt für Fremdadapter mit einfachen GATT-Operationen gedacht.
+Ein pvvx-OTA-Update dauert laut pvvx etwa 4 Minuten und besteht aus Tausenden kleinen Writes. Die Gerätelogik kommt deshalb als **Driver** in `ble`, analog zu den Decoder-Plugins, und nicht in Fremdadapter, die jeden Schritt per `sendTo` anstoßen. Weil der Weg zum ESP aber selbst über `sendTo` zum `esphome`-Adapter führt, braucht die Gateway-Schnittstelle eine **Sammel-Schreiboperation** (`gatt:writeSequence`, siehe §4a). Damit läuft nicht jeder 20-Byte-Write einzeln durch die States-DB. Die `sendTo`-API (Abschnitt 4) bleibt für Fremdadapter mit einfachen GATT-Operationen gedacht.
 
 **E6: ESPHome-Proxies sind das erste neue Backend. Lokale GATT-Verbindungen kommen später.**
 Ein zentraler Dongle reicht nicht, also bringen die Proxies den Hauptnutzen. Lokales GATT (BlueZ über D-Bus oder noble im Kindprozess) ist eine eigene Phase. noble greift über den rohen HCI-Socket an `bluetoothd` vorbei zu. Für Connect neben dem Scannen ist BlueZ über D-Bus meist robuster. Das entscheiden wir erst in Phase 6.
 
-**E7: Der `esphome`-Adapter hält die ESP-Verbindung, `ble` bekommt die Bluetooth-Daten weitergereicht.**
-Hier lohnt sich die Trennung in zwei Adapter, weil es konkrete Gründe gibt:
-- **Eine API-Verbindung pro ESP.** Der Bluetooth-Proxy in ESPHome bedient Advertisements und GATT voraussichtlich nur für *einen* API-Client. Würden `esphome` und `ble` sich beide verbinden, käme es zum Konflikt.
-- **Keine doppelte Konfiguration.** Host, Verschlüsselungs-Key, Discovery und Reconnect pflegt der `esphome`-Adapter ohnehin. `ble` bekommt keine eigene ESP-Liste.
+**E7: Gateways liefern ihre Pakete bei `ble` ab. `ble` meldet sich nirgends an.**
+Die Abhängigkeit zeigt nur in eine Richtung: Der `esphome`-Adapter kennt `ble`, aber `ble` kennt `esphome` nicht. `ble` stellt eine generische Gateway-Schnittstelle bereit (§4a). Jeder Adapter, der BLE-Pakete empfängt, schickt sie per `sendTo` dorthin.
+- **Kein Spezialcode in `ble`.** Es gibt keine Suche nach `esphome`-Instanzen, kein Abo und keine Lease-Verwaltung. `ble` behandelt jeden Absender gleich.
+- **Offen für andere Quellen.** Ein Shelly mit Bluetooth-Gateway, ein anderer Adapter oder ein Skript können dieselbe Schnittstelle verwenden. Für reinen Empfang reicht ein einziger Befehl.
+- **Eine API-Verbindung pro ESP.** Der Bluetooth-Proxy in ESPHome bedient Advertisements und GATT voraussichtlich nur für *einen* API-Client. Diese Verbindung hält weiterhin der `esphome`-Adapter, samt Host, Verschlüsselungs-Key, Discovery und Reconnect.
 - **Der Client existiert schon.** `ioBroker.esphome` nutzt bereits `@2colors/esphome-native-api` (^1.3.6). Die Bibliothek bietet `subscribeBluetoothAdvertisementService`, `connectBluetoothDeviceService(address, addressType, useCache)`, `listBluetoothGATTServicesService`, `read…`, `write…(…, response)`, `notify…`, Descriptor-Zugriffe und `encryptionKey`. `ble` braucht dafür keine neue Abhängigkeit.
-- **Aufteilung der Zuständigkeiten:** `esphome` ist reine *Weiterleitung* und weiß nichts über Decoder, Gateway-Auswahl oder Queues. Diese Logik liegt komplett in `ble`. Bei mehreren Abonnenten kann `esphome` Advertisements an alle verteilen. GATT-Verbindungen bleiben über `ble` koordiniert.
+- **Der Rückweg bleibt generisch.** Für aktive Verbindungen schickt `ble` GATT-Befehle an den Adapter, der das Gateway gemeldet hat. Den Instanznamen kennt `ble` aus der Meldung selbst.
+- **Aufteilung der Zuständigkeiten:** Der liefernde Adapter reicht nur durch und weiß nichts über Decoder, Gateway-Auswahl oder Queues. Diese Logik liegt komplett in `ble`.
 
-Im Spike zu Phase 1 ist in `@2colors/esphome-native-api` zu prüfen:
+Im Spike zu Phase 1b ist in `@2colors/esphome-native-api` zu prüfen:
 1. Gibt es Raw-Advertisements, also gebündelte AD-Bytes, oder nur geparste einzelne `ble`-Events? Bei vielen Geräten ist das für die Performance wichtig.
 2. Mit welchem Event kommen Notify-Daten an?
 3. Werden die Meldungen zu freien Verbindungsslots und zum Verbindungsstatus (MTU, Disconnect-Grund) bereitgestellt?
 
-Fehlt etwas, wird es per Upstream-PR in der Bibliothek ergänzt. `ble` hat keinen eigenen Client als Ausweg mehr.
+Fehlt etwas, wird es per Upstream-PR in der Bibliothek ergänzt.
 
 ---
 
@@ -189,49 +192,61 @@ Push-Richtung (Notifications, Advertisements): `ble` schickt `sendTo(<abonnieren
 
 ---
 
-## 4a. Bridge-Vertrag `esphome` ↔ `ble` (`ble-bridge/1`)
+## 4a. Gateway-Schnittstelle (`ble-gateway/1`)
 
-Beide Adapter kommunizieren ausschließlich über `sendTo`/`sendToAsync`. Der Vertrag wird in beiden Repos als Typdatei gepflegt (`bridge-protocol.ts`, identischer Inhalt) und hat eine Versionsnummer. Ein eigenes npm-Paket lohnt sich erst, wenn ein dritter Teilnehmer dazukommt.
+Über diese Schnittstelle liefern andere Adapter BLE-Pakete bei `ble` ab. Sie läuft komplett über `sendTo`. Die Typen liegen als `gateway-protocol.ts` in `ble`. Liefernde Adapter kopieren die Datei. Ein eigenes npm-Paket lohnt sich erst, wenn es mehrere Lieferanten gibt.
 
-### Ablauf
+### Stufe 1: Pakete abliefern (reiner Empfang)
 
-1. **Finden:** `ble` sucht alle Instanzen mit `common.name === "esphome"` (Objekt-View `system/instance`) und beobachtet deren `system.adapter.esphome.X.alive`.
-2. **Handshake:** `bt:hello` → Protokollversion und Liste der Bluetooth-fähigen ESPs. Bei unbekannter Major-Version schreibt `ble` eine Warnung ins Log und deaktiviert die Bridge zu dieser Instanz.
-3. **Abo:** `bt:subscribe` mit Lease. `ble` schickt alle 10 s `bt:keepalive`. Läuft die Lease ab, weil `ble` gestoppt oder abgestürzt ist, beendet `esphome` alle für diesen Abonnenten geöffneten GATT-Verbindungen und kündigt das Advertisement-Abo am ESP, wenn es keinen weiteren Abonnenten gibt.
-4. **Neustart:** Startet `esphome` neu (`alive` false → true) oder antwortet auf `keepalive` mit `UNKNOWN_SUBSCRIPTION`, beginnt `ble` wieder bei `bt:hello`.
+Der liefernde Adapter schickt die Pakete, sobald er welche hat:
 
-`esphome` abonniert die Advertisements am ESP **nur, solange mindestens ein Abonnent existiert**. Ohne `ble` ändert sich am heutigen Verhalten also nichts.
+```ts
+sendTo("ble.0", "gateway:advertisements", {
+	gatewayId: "proxy-og", // eindeutig innerhalb des Absenders
+	items: [{ address, addressType, rssi, data /* AD-Rohdaten, base64 */ }],
+});
+```
 
-### Anfragen `ble` → `esphome.X`
+Mehr muss ein passives Gateway nicht können.
+
+- **Keine Anmeldung.** `ble` legt ein unbekanntes Gateway beim ersten Paket an. Die ID ist `<absender>:<gatewayId>`, zum Beispiel `esphome.0:proxy-og`.
+- **Bündelung.** Pro Gateway kommt höchstens ca. alle 250 ms ein Aufruf.
+- **Offline-Erkennung.** Ein Gateway gilt als offline, wenn 60 s lang nichts kommt oder `system.adapter.<absender>.alive` auf false geht.
+- **Senden nur, wenn `ble` läuft.** Der Absender beobachtet `system.adapter.ble.0.alive`. `esphome` abonniert die Advertisements am ESP auch nur in dieser Zeit. Ohne `ble` ändert sich am Verhalten von `esphome` nichts.
+
+### Stufe 2: aktive Verbindungen (optional)
+
+Ein Gateway, das GATT-Verbindungen aufbauen kann, meldet das zusätzlich an.
+
+Befehle an `ble.0`:
+
+| Befehl | Payload → Antwort |
+|---|---|
+| `gateway:announce` | `{ protocol: "ble-gateway/1", gateways: [{ gatewayId, name, connect: true, freeSlots, slotLimit }] }` → `{ protocol, epoch }`. Gesendet beim Start, bei jeder Änderung der Slots und alle 30 s. |
+| `gateway:connectionState` | `{ gatewayId, address, connected, mtu?, error? }`. Auch ungeplante Disconnects werden gemeldet. |
+| `gateway:notification` | `{ gatewayId, address, handle, data: base64 }` |
+
+Befehle von `ble` an den Absender der Meldung:
 
 | Befehl | Payload → Ergebnis |
 |---|---|
-| `bt:hello` | `{ protocol: "ble-bridge/1", subscriber: "ble.0" }` → `{ protocol, proxies: [{ proxyId, name, mac, featureFlags, connected, freeSlots, slotLimit }] }` |
-| `bt:subscribe` / `bt:keepalive` / `bt:unsubscribe` | `{ subscriber, leaseMs }` → `{ subscriptionId }` |
-| `bt:connect` | `{ proxyId, address, addressType, useCache }` → `{ mtu }` |
-| `bt:disconnect` | `{ proxyId, address }` |
-| `bt:getServices` | `{ proxyId, address }` → `[{ uuid, handle, characteristics: [{ uuid, handle, properties, descriptors }] }]` |
-| `bt:read` / `bt:readDescriptor` | `{ proxyId, address, handle }` → `{ data: base64 }` |
-| `bt:write` / `bt:writeDescriptor` | `{ proxyId, address, handle, data: base64, withResponse }` |
-| `bt:writeSequence` | `{ proxyId, address, handle, chunks: base64[], withResponse, delayMs? }` → `{ written }`. Maximal ca. 256 Chunks pro Aufruf. Gedacht für OTA, siehe E5. |
-| `bt:setNotify` | `{ proxyId, address, handle, enable }` |
-
-### Push `esphome.X` → Abonnent (`ble.0`)
-
-| Befehl | Payload |
-|---|---|
-| `bt:advertisements` | `{ proxyId, items: [{ address, addressType, rssi, data: base64 }] }`. Die AD-Rohdaten werden gebündelt: ein Batch des ESP, höchstens ca. alle 250 ms. |
-| `bt:proxyState` | `{ proxyId, connected, freeSlots, slotLimit }` |
-| `bt:connectionState` | `{ proxyId, address, connected, mtu?, error? }`. Auch ungeplante Disconnects werden gemeldet. |
-| `bt:notification` | `{ proxyId, address, handle, data: base64 }` |
+| `gatt:connect` | `{ gatewayId, address, addressType, useCache }` → `{ mtu }` |
+| `gatt:disconnect` | `{ gatewayId, address }` |
+| `gatt:getServices` | `{ gatewayId, address }` → `[{ uuid, handle, characteristics: [{ uuid, handle, properties, descriptors }] }]` |
+| `gatt:read` / `gatt:readDescriptor` | `{ gatewayId, address, handle }` → `{ data: base64 }` |
+| `gatt:write` / `gatt:writeDescriptor` | `{ gatewayId, address, handle, data: base64, withResponse }` |
+| `gatt:writeSequence` | `{ gatewayId, address, handle, chunks: base64[], withResponse, delayMs? }` → `{ written }`. Maximal ca. 256 Chunks pro Aufruf. Gedacht für OTA, siehe E5. |
+| `gatt:setNotify` | `{ gatewayId, address, handle, enable }` |
 
 ### Regeln
 
 - **Adressen** werden als MAC-String in Kleinbuchstaben mit Doppelpunkten übertragen, genau wie heute im `ble`-Adapter. Die Umrechnung aus dem `uint64` der ESPHome-API übernimmt `esphome`.
-- **`esphome` interpretiert keine Bluetooth-Inhalte.** Es gibt kein Parsing von AD-Daten, keine UUID-Logik und keine Gateway-Auswahl. Ausnahme ist die Liste der Services mit Handles, weil sie 1:1 aus der API kommt.
-- **GATT-Verbindungen gehören dem Abonnenten**, der sie geöffnet hat. Advertisements gehen an alle Abonnenten.
-- **Fehler** haben die Form `{ error: { code, message } }`. Die Codes sind `NOT_CONNECTED`, `NO_FREE_SLOT`, `TIMEOUT`, `GATT_ERROR`, `UNKNOWN_PROXY`, `UNKNOWN_SUBSCRIPTION`.
-- **Größenordnung:** 3 Proxies × 60 Geräte × ca. 1 Advertisement/s ergeben ca. 180 Advertisements/s. Gebündelt sind das nur ca. 4–12 `sendTo`/s, das ist für die States-DB unkritisch. GATT-Einzeloperationen kosten zwei Wege durch die DB (einige ms). Für Zeitsync ist das irrelevant, OTA läuft über `bt:writeSequence`.
+- **Der liefernde Adapter interpretiert keine Bluetooth-Inhalte.** Es gibt dort kein Parsing von AD-Daten, keine UUID-Logik und keine Gateway-Auswahl. Ausnahme ist die Liste der Services mit Handles, weil sie 1:1 aus der API kommt.
+- **Aufräumen ohne Lease.** Geht `system.adapter.ble.0.alive` auf false, trennt der liefernde Adapter alle GATT-Verbindungen, die er für `ble` geöffnet hat. Die Antwort auf `gateway:announce` enthält außerdem den Startzeitpunkt von `ble` (`epoch`). Ändert er sich, wurde `ble` neu gestartet, und der Absender trennt die alten Verbindungen ebenfalls.
+- **Versionsprüfung.** Bei unbekannter Major-Version antwortet `ble` auf `gateway:announce` mit `UNSUPPORTED_PROTOCOL`. Der Absender schreibt dann eine Warnung ins Log und bietet keine aktiven Verbindungen an.
+- **Fehler** haben die Form `{ error: { code, message } }`. Die Codes sind `NOT_CONNECTED`, `NO_FREE_SLOT`, `TIMEOUT`, `GATT_ERROR`, `UNKNOWN_GATEWAY`, `UNSUPPORTED_PROTOCOL`.
+- **Mehrere `ble`-Instanzen.** Der Absender liefert an genau eine Instanz. Welche das ist, steht in seiner Konfiguration.
+- **Größenordnung:** 3 Proxies × 60 Geräte × ca. 1 Advertisement/s ergeben ca. 180 Advertisements/s. Gebündelt sind das nur ca. 4–12 `sendTo`/s, das ist für die States-DB unkritisch. GATT-Einzeloperationen kosten zwei Wege durch die DB (einige ms). Für Zeitsync ist das irrelevant, OTA läuft über `gatt:writeSequence`.
 
 ---
 
@@ -284,20 +299,22 @@ Dazu kommt instanzweit `firmware.updateAll`.
 ## 6. Konfiguration, Objekte, Admin
 
 - **Konfiguration `ble` (`native`):**
-  - `esphomeBridge: { enabled, instances: "auto" | string[] }`. Es gibt keine Hosts und keine Keys, die pflegt der `esphome`-Adapter.
   - lokaler Scanner `enabled` und `hciDevice` (wie heute)
   - `server` (wie heute, wird zum Transport `noble-remote`)
   - pvvx-Driver: `autoTimeSync`, `timeSyncIntervalH`, `minBatteryForOta`
-- **Konfiguration `esphome`:** pro Gerät eine Option „Bluetooth-Proxy für andere Adapter freigeben“. Der Standard ist an, wenn das Gerät Bluetooth-Proxy-Feature-Flags meldet.
-- **Migration:** Bestehende Konfigurationen bleiben gültig. Ohne aktivierte Bridge verhält sich der Adapter exakt wie heute.
+  - Für Gateways gibt es nichts zu konfigurieren. Sie erscheinen von selbst, sobald ein Adapter Pakete liefert.
+- **Konfiguration `esphome`:**
+  - „BLE-Pakete weiterleiten an“ mit Auswahl der `ble`-Instanz. Gibt es genau eine, ist sie vorausgewählt.
+  - Pro Gerät lässt sich die Weiterleitung abschalten.
+- **Migration:** Bestehende Konfigurationen bleiben gültig. Solange kein Adapter Pakete liefert, verhält sich `ble` exakt wie heute.
 - **Neue Instanz-Objekte in `ble`:**
-  - `gateways.<instanz>_<proxyId>.connected`
-  - `gateways.<instanz>_<proxyId>.freeSlots`
-  - `gateways.<instanz>_<proxyId>.lastAdvertisement`
+  - `gateways.<absender>_<gatewayId>.connected`
+  - `gateways.<absender>_<gatewayId>.freeSlots`
+  - `gateways.<absender>_<gatewayId>.lastAdvertisement`
   - `info.connection` = mindestens ein Transport aktiv
 - **Geräteobjekte:** unverändert. Neu kommen optional `<device>.gateway` und die Driver-States hinzu.
-- **Admin `ble`:** Die React-UI zeigt die gefundenen `esphome`-Instanzen und ihre Proxies (über `bt:hello`) nur lesend an. Langfristig lohnt sich ein Umstieg auf `jsonConfig`, das ist aber nicht Teil dieses Vorhabens.
-- **Abhängigkeit:** Die Bridge braucht eine `esphome`-Version mit `ble-bridge/1`. Sie wird **nicht** als harte Abhängigkeit in `io-package.json` eingetragen, weil der Adapter auch rein lokal nutzbar bleiben soll. Stattdessen prüft `bt:hello` zur Laufzeit die Version, und das README dokumentiert die Mindestversion.
+- **Admin `ble`:** Die React-UI zeigt die gemeldeten Gateways nur lesend an. Langfristig lohnt sich ein Umstieg auf `jsonConfig`, das ist aber nicht Teil dieses Vorhabens.
+- **Abhängigkeit:** `ble` braucht den `esphome`-Adapter nicht. Umgekehrt braucht die Weiterleitung in `esphome` eine `ble`-Version mit `ble-gateway/1`. Das wird keine harte Abhängigkeit, weil die Weiterleitung optional ist.
 - `io-package.json`: Die Mindestversion von `js-controller` sollte realistisch angehoben werden (heute `>=1.4.2`). Die Beschreibung wird angepasst, weil der Adapter nicht mehr nur ein Beacon-Monitor ist.
 
 ---
@@ -309,18 +326,18 @@ Jede Phase ist für sich releasefähig.
 | Phase | Inhalt | Ergebnis / Abnahme | Größe |
 |---|---|---|---|
 | **0: Refactoring ohne Verhaltensänderung** | Aus `main.ts` werden `scanner/` (Dedupe, Drosselung, Plugin-Dispatch) und `transports/noble-local`, `noble-remote` extrahiert. `PeripheralInfo` wird ein eigener Typ. Dazu Unit-Tests für den Dispatch mit einem Fake-Transport. | Bestehende Tests sind grün, und identische Objekte und States entstehen im manuellen Test mit einem echten Dongle. | M |
-| **1a: `esphome` passive Weiterleitung** (PR in `ioBroker.esphome`) | Spike in `@2colors/esphome-native-api` (E7), `bridge-protocol.ts`, `bt:hello`/`subscribe`/`keepalive`, Weiterleitung von `bt:advertisements` und `bt:proxyState`, Lease-Ablauf, Option pro Gerät. | Ein Testskript abonniert `esphome.0` und bekommt gebündelte Roh-Advertisements. Ohne Abonnenten verhält sich der Adapter wie bisher. | M |
-| **1b: `ble` passiv über die Bridge** | Transport `esphome-bridge`, AD-Parser (mit Unit-Tests gegen echte Pakete), Erkennung der Instanzen und `alive`-Überwachung, Registry mit Gateway pro Gerät, Dedupe. | pvvx-/BTHome-Sensoren aus drei Stockwerken landen mit korrekter MAC in den bestehenden Objekten, ohne doppelte Dekodierung. Ein Neustart von `esphome` wird automatisch überbrückt. | L |
-| **2: GATT-Kern** | `esphome`: `bt:connect`/`disconnect`/`getServices`/`read`/`write`/`setNotify`, Push von `connectionState` und `notification`, Aufräumen beim Lease-Ablauf. `ble`: `connections/` mit Session, Queue, Leases, Slots, Timeouts, Retry über ein anderes Gateway, plus Debug-Befehle über `sendTo` für den PoC. | Ein Characteristic eines Thermometers wird über einen entfernten Proxy gelesen und geschrieben, und das Verhalten bei parallelen Anfragen ist getestet. Stirbt `ble`, baut `esphome` die Verbindungen ab. | L |
+| **1a: Gateway-Schnittstelle in `ble` (Empfang)** | `gateway-protocol.ts`, Befehl `gateway:advertisements`, Transport `remote-gateway`, AD-Parser (mit Unit-Tests gegen echte Pakete), Registry mit Gateway pro Gerät, Dedupe, Offline-Erkennung. | Ein Testskript schickt aufgezeichnete Pakete per `sendTo` an `ble.0`. Die Sensoren landen mit korrekter MAC in den bestehenden Objekten, ohne doppelte Dekodierung. | L |
+| **1b: `esphome` liefert Pakete** (PR in `ioBroker.esphome`) | Spike in `@2colors/esphome-native-api` (E7), Advertisement-Abo am ESP, solange `ble` läuft, Bündelung, Konfigurationsoption. | pvvx-/BTHome-Sensoren aus drei Stockwerken erscheinen in `ble`. Ohne `ble` verhält sich `esphome` wie bisher. | S–M |
+| **2: GATT-Kern** | `ble`: `gateway:announce`, `connections/` mit Session, Queue, Leases, Slots, Timeouts, Retry über ein anderes Gateway, plus Debug-Befehle über `sendTo` für den PoC. `esphome`: `gateway:announce`, die `gatt:*`-Befehle, Meldung von `connectionState` und `notification`, Aufräumen, wenn `ble` stoppt. | Ein Characteristic eines Thermometers wird über einen entfernten Proxy gelesen und geschrieben, und das Verhalten bei parallelen Anfragen ist getestet. Stirbt `ble`, baut `esphome` die Verbindungen ab. | L |
 | **3: pvvx-Zeitsync** | `drivers/pvvx` mit Zeit lesen und setzen, Drift, Auslösern und DST-Erkennung. | Eine simulierte DST-Umstellung (Offset gemockt) synchronisiert alle Geräte gestaffelt, und `time.drift` ist danach ≈ 0. | M |
-| **4: pvvx-OTA** | `esphome`: `bt:writeSequence`. `ble`: Firmware-Verwaltung, Vorab-Prüfungen, serieller Rollout, Fortschritt. | Ein Testgerät wird über einen Proxy erfolgreich geflasht, und ein absichtlicher Abbruch lässt das Gerät funktionsfähig. | L |
+| **4: pvvx-OTA** | `esphome`: `gatt:writeSequence`. `ble`: Firmware-Verwaltung, Vorab-Prüfungen, serieller Rollout, Fortschritt. | Ein Testgerät wird über einen Proxy erfolgreich geflasht, und ein absichtlicher Abbruch lässt das Gerät funktionsfähig. | L |
 | **5: Externe API** | Vollständige `sendTo`-API (Abschnitt 4) mit Leases, Advertisement-Abos und Doku. | Ein Beispieladapter oder -skript liest per API ein Characteristic und erhält Notifications. | M |
 | **6 (optional): Lokales GATT** | BlueZ über D-Bus oder noble als Connect-fähiger Transport. | Der lokale Dongle kann als Gateway für Sessions dienen. | M–L |
 | **später** | Verschlüsselte BTHome-Pakete (Bindkey pro Gerät), Identitätsauflösung für rotierende Adressen (IRK). | n/a | n/a |
 
 Den PoC aus der Diskussion („ESPHome-Proxy, GATT-Verbindung über `sendToAsync`, lesen und schreiben“) decken die Phasen 1 und 2 ab. Phase 0 lohnt sich trotzdem vorab: Sie ist klein und verhindert, dass der Umbau in den 544 Zeilen von `main.ts` landet.
 
-Die Phasen 0 und 1a hängen nicht voneinander ab und können parallel laufen, weil sie in verschiedenen Repos liegen. Der Vertrag (§4a) sollte vor 1a/1b als Typdatei feststehen, Phase 1 braucht davon nur den passiven Teil.
+Phase 1a braucht den `esphome`-Adapter nicht: Die Schnittstelle lässt sich mit einem Skript und aufgezeichneten Paketen testen. Phase 1b ist danach ein kleiner PR in `ioBroker.esphome`, der parallel zu Phase 2 laufen kann.
 
 ### Teststrategie
 
@@ -332,8 +349,8 @@ Die Phasen 0 und 1a hängen nicht voneinander ab und können parallel laufen, we
   - pvvx-Befehle kodieren und dekodieren,
   - DST-Trigger (gemockte Zeit).
 - **Integration:**
-  - In `ble` wird eine **Fake-Bridge** getestet: ein gemocktes `sendTo`, das den Vertrag aus §4a spielt, Advertisements einspielt, GATT-Antworten und Abbrüche simuliert und auch einen `esphome`-Neustart nachstellt. Damit kommt die CI ohne Hardware aus.
-  - In `esphome` wird die Bridge-Schicht gegen eine gemockte `esphome-native-api`-Verbindung getestet (Weiterleitung, Lease-Ablauf, Aufräumen).
+  - In `ble` wird die Gateway-Schnittstelle direkt getestet: Der Test schickt die Befehle aus §4a mit aufgezeichneten Paketen. Für den Connection Manager gibt es ein **Fake-Gateway**, das die `gatt:*`-Befehle beantwortet und Abbrüche simuliert. Damit kommt die CI ohne Hardware aus.
+  - In `esphome` wird die Weiterleitung gegen eine gemockte `esphome-native-api`-Verbindung getestet (Bündelung, Verhalten ohne `ble`, Aufräumen).
   - Der bestehende `test/integration` bleibt erhalten.
 - **Hardware:** ein Proxy und ein Thermometer als Mindest-Setup für die Phasen 2 bis 4.
 
@@ -341,31 +358,32 @@ Die Phasen 0 und 1a hängen nicht voneinander ab und können parallel laufen, we
 
 ## 8. Risiken und offene Punkte
 
-1. **Verträge zwischen zwei Adaptern.** Die Release-Zyklen von `ble` und `esphome` sind gekoppelt. Gegenmittel:
-   - ein versioniertes Protokoll (`ble-bridge/1`) mit Prüfung beim Handshake,
-   - nur erweiternde Änderungen innerhalb einer Major-Version,
-   - die Typdatei in beiden Repos, die per CI-Check auf Gleichheit geprüft wird.
+1. **Schnittstelle zwischen zwei Adaptern.** `esphome` hängt von der Gateway-Schnittstelle in `ble` ab. Gegenmittel:
+   - Der Befehl für den reinen Empfang ist klein und bleibt stabil.
+   - Der aktive Teil trägt eine Versionsnummer (`ble-gateway/1`), die bei `gateway:announce` geprüft wird.
+   - Innerhalb einer Major-Version gibt es nur erweiternde Änderungen.
 
-   Mit den Maintainern von `ioBroker.esphome` (DrozmotiX) sollte früh abgestimmt werden, dass die Bridge dort hineinkommt.
-2. **Lebenszyklus über Adaptergrenzen.** Verwaiste GATT-Verbindungen am ESP belegen Slots. Dagegen helfen die Lease mit Keepalive, die Überwachung von `alive` auf beiden Seiten und das Aufräumen in `esphome`, wenn eine Lease abläuft. Das muss explizit getestet werden: Prozess-Kill von `ble` während eines laufenden OTA.
-3. **Ein Bluetooth-Client pro ESPHome-Proxy.** Mit diesem Design ist der Konflikt aufgelöst, weil nur `esphome` verbunden ist. Andere Systeme (zum Beispiel ein parallel laufendes Home Assistant am selben Proxy) können weiterhin kollidieren. Das gehört ins README.
-2. **Aktive Verbindungen am ESP32.** Es gibt nur wenige Slots (typisch 3). Das ESPHome-Setup braucht `bluetooth_proxy: active: true`. Coexistence von WLAN und BLE kann bei OTA (lange Verbindung, viele Writes) die Stabilität drücken. Ethernet-ESP32 (zum Beispiel Olimex POE) sind deshalb zu bevorzugen und zu dokumentieren.
-3. **pvvx-Protokolldetails.** Payloads für Zeit und OTA sind im README nicht spezifiziert und müssen aus `TelinkMiFlasher.html` und `ble_ota.py` übernommen werden. Ein Risiko sind Unterschiede zwischen Firmwareversionen. Deshalb Version auslesen und gegen eine bekannte Liste prüfen.
-4. **Lasten bei vielen Proxies.** Jedes Advertisement kommt N-fach an. Dedupe muss vor dem Decoder und vor allen DB-Zugriffen passieren (der heutige `onDiscover` macht pro Paket mehrere `getStateAsync`/`objectExists`).
-5. **Verhältnis zu Upstream.** Das Repo ist ein Fork von `AlCalzone/ioBroker.ble`. Vor Phase 1 sollte geklärt werden, ob die Änderungen upstream gehen (dann Phase 0 als eigenen PR anbieten) oder der Fork eigenständig released wird.
-6. **Rechte und Plattform.** Die Bridge braucht in `ble` keine nativen Module und keine `cap_net_raw`-Rechte. Ein reines Proxy-Setup (ohne lokales Bluetooth) muss also auch in Docker ohne Host-Networking laufen. Dafür muss `noble` lazy bzw. optional geladen werden.
+   Mit den Maintainern von `ioBroker.esphome` (DrozmotiX) sollte früh abgestimmt werden, dass die Weiterleitung dort hineinkommt.
+2. **Aufräumen über Adaptergrenzen.** Verwaiste GATT-Verbindungen am ESP belegen Slots. Dagegen helfen die Überwachung von `alive` und der `epoch` aus `gateway:announce` (§4a). Das muss explizit getestet werden: Prozess-Kill von `ble` während eines laufenden OTA.
+3. **Ein Bluetooth-Client pro ESPHome-Proxy.** Innerhalb von ioBroker ist der Konflikt aufgelöst, weil nur `esphome` verbunden ist. Andere Systeme (zum Beispiel ein parallel laufendes Home Assistant am selben Proxy) können weiterhin kollidieren. Das gehört ins README.
+4. **Aktive Verbindungen am ESP32.** Es gibt nur wenige Slots (typisch 3). Das ESPHome-Setup braucht `bluetooth_proxy: active: true`. Coexistence von WLAN und BLE kann bei OTA (lange Verbindung, viele Writes) die Stabilität drücken. Ethernet-ESP32 (zum Beispiel Olimex POE) sind deshalb zu bevorzugen und zu dokumentieren.
+5. **pvvx-Protokolldetails.** Payloads für Zeit und OTA sind im README nicht spezifiziert und müssen aus `TelinkMiFlasher.html` und `ble_ota.py` übernommen werden. Ein Risiko sind Unterschiede zwischen Firmwareversionen. Deshalb Version auslesen und gegen eine bekannte Liste prüfen.
+6. **Lasten bei vielen Proxies.** Jedes Advertisement kommt N-fach an. Dedupe muss vor dem Decoder und vor allen DB-Zugriffen passieren (der heutige `onDiscover` macht pro Paket mehrere `getStateAsync`/`objectExists`).
+7. **Verhältnis zu Upstream.** Das Repo ist ein Fork von `AlCalzone/ioBroker.ble`. Vor Phase 1 sollte geklärt werden, ob die Änderungen upstream gehen (dann Phase 0 als eigenen PR anbieten) oder der Fork eigenständig released wird.
+8. **Rechte und Plattform.** Die Gateway-Schnittstelle braucht in `ble` keine nativen Module und keine `cap_net_raw`-Rechte. Ein reines Proxy-Setup (ohne lokales Bluetooth) muss also auch in Docker ohne Host-Networking laufen. Dafür muss `noble` lazy bzw. optional geladen werden.
 
 ---
 
 ## 9. Nächste konkrete Schritte
 
 1. Phase 0 umsetzen: Refactoring `main.ts` → `scanner/` + `transports/noble-*`, eigener `Advertisement`-Typ.
-2. Parallel den Spike in `ioBroker.esphome` durchführen: Über die vorhandene `@2colors/esphome-native-api`-Verbindung gegen einen echten Proxy prüfen, ob Folgendes erreichbar ist:
+2. `gateway-protocol.ts` (§4a) als Typdatei in `ble` festlegen, zuerst nur den Teil für den reinen Empfang.
+3. Den Spike in `ioBroker.esphome` durchführen: Über die vorhandene `@2colors/esphome-native-api`-Verbindung gegen einen echten Proxy prüfen, ob Folgendes erreichbar ist:
    - Raw-Advertisements,
    - Notify-Events,
    - freie Slots,
    - MTU und Disconnect-Gründe.
 
    Lücken werden als PR an die Bibliothek gemeldet.
-3. `bridge-protocol.ts` (§4a) als Typdatei festlegen und mit den Maintainern von `ioBroker.esphome` abstimmen, zum Beispiel per Issue oder Draft-PR.
-4. Das pvvx-Protokoll für `0x23` und Telink-OTA aus dem Flasher-Quellcode extrahieren und als Spezifikation in `docs/pvvx-protocol.md` festhalten.
+4. Die Weiterleitung mit den Maintainern von `ioBroker.esphome` abstimmen, zum Beispiel per Issue oder Draft-PR.
+5. Das pvvx-Protokoll für `0x23` und Telink-OTA aus dem Flasher-Quellcode extrahieren und als Spezifikation in `docs/pvvx-protocol.md` festhalten.
