@@ -212,7 +212,7 @@ Mehr muss ein passives Gateway nicht können.
 - **Keine Anmeldung.** `ble` legt ein unbekanntes Gateway beim ersten Paket an. Die ID ist `<absender>:<gatewayId>`, zum Beispiel `esphome.0:proxy-og`.
 - **Bündelung.** Pro Gateway kommt höchstens ca. alle 250 ms ein Aufruf.
 - **Offline-Erkennung.** Ein Gateway gilt als offline, wenn 60 s lang nichts kommt oder `system.adapter.<absender>.alive` auf false geht.
-- **Senden nur, wenn `ble` läuft.** Der Absender beobachtet `system.adapter.ble.0.alive`. `esphome` abonniert die Advertisements am ESP auch nur in dieser Zeit. Ohne `ble` ändert sich am Verhalten von `esphome` nichts.
+- **Der Absender prüft nicht, ob `ble` läuft.** Er schickt die Pakete einfach ab, sobald die Weiterleitung konfiguriert ist. Läuft `ble` gerade nicht, gehen sie verloren. Das schadet nicht, weil die Sensoren ohnehin alle paar Sekunden neu senden. Ohne konfigurierte Weiterleitung ändert sich am Verhalten von `esphome` nichts.
 
 ### Stufe 2: aktive Verbindungen (optional)
 
@@ -242,7 +242,7 @@ Befehle von `ble` an den Absender der Meldung:
 
 - **Adressen** werden als MAC-String in Kleinbuchstaben mit Doppelpunkten übertragen, genau wie heute im `ble`-Adapter. Die Umrechnung aus dem `uint64` der ESPHome-API übernimmt `esphome`.
 - **Der liefernde Adapter interpretiert keine Bluetooth-Inhalte.** Es gibt dort kein Parsing von AD-Daten, keine UUID-Logik und keine Gateway-Auswahl. Ausnahme ist die Liste der Services mit Handles, weil sie 1:1 aus der API kommt.
-- **Aufräumen ohne Lease.** Geht `system.adapter.ble.0.alive` auf false, trennt der liefernde Adapter alle GATT-Verbindungen, die er für `ble` geöffnet hat. Die Antwort auf `gateway:announce` enthält außerdem den Startzeitpunkt von `ble` (`epoch`). Ändert er sich, wurde `ble` neu gestartet, und der Absender trennt die alten Verbindungen ebenfalls.
+- **Aufräumen ohne Lease (nur Stufe 2).** Erst für aktive Verbindungen muss der Absender wissen, ob `ble` läuft. Geht `system.adapter.ble.0.alive` auf false, trennt der liefernde Adapter alle GATT-Verbindungen, die er für `ble` geöffnet hat. Die Antwort auf `gateway:announce` enthält außerdem den Startzeitpunkt von `ble` (`epoch`). Ändert er sich, wurde `ble` neu gestartet, und der Absender trennt die alten Verbindungen ebenfalls.
 - **Versionsprüfung.** Bei unbekannter Major-Version antwortet `ble` auf `gateway:announce` mit `UNSUPPORTED_PROTOCOL`. Der Absender schreibt dann eine Warnung ins Log und bietet keine aktiven Verbindungen an.
 - **Fehler** haben die Form `{ error: { code, message } }`. Die Codes sind `NOT_CONNECTED`, `NO_FREE_SLOT`, `TIMEOUT`, `GATT_ERROR`, `UNKNOWN_GATEWAY`, `UNSUPPORTED_PROTOCOL`.
 - **Mehrere `ble`-Instanzen.** Der Absender liefert an genau eine Instanz. Welche das ist, steht in seiner Konfiguration.
@@ -327,7 +327,7 @@ Jede Phase ist für sich releasefähig.
 |---|---|---|---|
 | **0: Refactoring ohne Verhaltensänderung** | Aus `main.ts` werden `scanner/` (Dedupe, Drosselung, Plugin-Dispatch) und `transports/noble-local`, `noble-remote` extrahiert. `PeripheralInfo` wird ein eigener Typ. Dazu Unit-Tests für den Dispatch mit einem Fake-Transport. | Bestehende Tests sind grün, und identische Objekte und States entstehen im manuellen Test mit einem echten Dongle. | M |
 | **1a: Gateway-Schnittstelle in `ble` (Empfang)** | `gateway-protocol.ts`, Befehl `gateway:advertisements`, Transport `remote-gateway`, AD-Parser (mit Unit-Tests gegen echte Pakete), Registry mit Gateway pro Gerät, Dedupe, Offline-Erkennung. | Ein Testskript schickt aufgezeichnete Pakete per `sendTo` an `ble.0`. Die Sensoren landen mit korrekter MAC in den bestehenden Objekten, ohne doppelte Dekodierung. | L |
-| **1b: `esphome` liefert Pakete** (PR in `ioBroker.esphome`) | Spike in `@2colors/esphome-native-api` (E7), Advertisement-Abo am ESP, solange `ble` läuft, Bündelung, Konfigurationsoption. | pvvx-/BTHome-Sensoren aus drei Stockwerken erscheinen in `ble`. Ohne `ble` verhält sich `esphome` wie bisher. | S–M |
+| **1b: `esphome` liefert Pakete** (PR in `ioBroker.esphome`) | Spike in `@2colors/esphome-native-api` (E7), Advertisement-Abo am ESP, sobald die Weiterleitung konfiguriert ist, Bündelung, Konfigurationsoption. | pvvx-/BTHome-Sensoren aus drei Stockwerken erscheinen in `ble`. Ohne konfigurierte Weiterleitung verhält sich `esphome` wie bisher. | S–M |
 | **2: GATT-Kern** | `ble`: `gateway:announce`, `connections/` mit Session, Queue, Leases, Slots, Timeouts, Retry über ein anderes Gateway, plus Debug-Befehle über `sendTo` für den PoC. `esphome`: `gateway:announce`, die `gatt:*`-Befehle, Meldung von `connectionState` und `notification`, Aufräumen, wenn `ble` stoppt. | Ein Characteristic eines Thermometers wird über einen entfernten Proxy gelesen und geschrieben, und das Verhalten bei parallelen Anfragen ist getestet. Stirbt `ble`, baut `esphome` die Verbindungen ab. | L |
 | **3: pvvx-Zeitsync** | `drivers/pvvx` mit Zeit lesen und setzen, Drift, Auslösern und DST-Erkennung. | Eine simulierte DST-Umstellung (Offset gemockt) synchronisiert alle Geräte gestaffelt, und `time.drift` ist danach ≈ 0. | M |
 | **4: pvvx-OTA** | `esphome`: `gatt:writeSequence`. `ble`: Firmware-Verwaltung, Vorab-Prüfungen, serieller Rollout, Fortschritt. | Ein Testgerät wird über einen Proxy erfolgreich geflasht, und ein absichtlicher Abbruch lässt das Gerät funktionsfähig. | L |
@@ -350,7 +350,7 @@ Phase 1a braucht den `esphome`-Adapter nicht: Die Schnittstelle lässt sich mit 
   - DST-Trigger (gemockte Zeit).
 - **Integration:**
   - In `ble` wird die Gateway-Schnittstelle direkt getestet: Der Test schickt die Befehle aus §4a mit aufgezeichneten Paketen. Für den Connection Manager gibt es ein **Fake-Gateway**, das die `gatt:*`-Befehle beantwortet und Abbrüche simuliert. Damit kommt die CI ohne Hardware aus.
-  - In `esphome` wird die Weiterleitung gegen eine gemockte `esphome-native-api`-Verbindung getestet (Bündelung, Verhalten ohne `ble`, Aufräumen).
+  - In `esphome` wird die Weiterleitung gegen eine gemockte `esphome-native-api`-Verbindung getestet (Bündelung, Aufräumen der GATT-Verbindungen, wenn `ble` stoppt).
   - Der bestehende `test/integration` bleibt erhalten.
 - **Hardware:** ein Proxy und ein Thermometer als Mindest-Setup für die Phasen 2 bis 4.
 
