@@ -1,6 +1,6 @@
 # Plan: zentrale Bluetooth-Infrastruktur in `ioBroker.ble`
 
-Status: Entwurf · Stand 2026-11-10
+Status: Entwurf · Stand 2026-11-11
 
 Ziel: `ioBroker.ble` wird die zentrale BLE-Schicht für ioBroker. Er stellt mehrere Empfänger (ESPHome-Bluetooth-Proxies, lokaler Dongle) bereit, macht aktive GATT-Verbindungen möglich und bietet anderen Adaptern eine API. Der konkrete Anlass sind pvvx-Thermometer ([ATC_MiThermometer](https://github.com/pvvx/ATC_MiThermometer)), deren Uhrzeit automatisch synchronisiert werden soll (inklusive Sommer-/Winterzeit) und auf die Firmware-Updates ausgerollt werden sollen.
 
@@ -102,6 +102,20 @@ Im Spike zu Phase 1b ist in `@2colors/esphome-native-api` zu prüfen:
 3. Werden die Meldungen zu freien Verbindungsslots und zum Verbindungsstatus (MTU, Disconnect-Grund) bereitgestellt?
 
 Fehlt etwas, wird es per Upstream-PR in der Bibliothek ergänzt.
+
+**E8: `ble` läuft auch als reiner Hub, ohne Bluetooth-Stick.**
+Der Hauptprozess lädt schon heute keinen nativen Code. `noble` wird nur im Kindprozess `scanProcess` geladen. Die Kopplung an lokale Hardware besteht aus vier Stellen:
+
+| Stelle heute | Änderung |
+|---|---|
+| `main.ts` startet den Scan-Prozess immer (oder verbindet sich mit `server`). | Neue Option `localScanner`, Standard an. Ist sie aus, startet kein Kindprozess, und `noble` wird nie geladen. |
+| `handleScanProcessError` beendet den ganzen Adapter, wenn keine Hardware gefunden wird oder `EAFNOSUPPORT` auftritt (Docker ohne Host-Networking). | Ein Fehler des lokalen Scanners beendet den Adapter nicht mehr. Er wird geloggt, und das lokale Gateway gilt als offline. Die Ausnahme bleibt der nötige Rebuild (Exit-Code 13). |
+| `@stoprocent/noble` ist eine harte Abhängigkeit mit Install-Skript. Schlägt dessen Build fehl, schlägt die Installation des Adapters fehl. | `noble` wird zur `optionalDependency`. Fehlt es, obwohl `localScanner` an ist, meldet der Adapter das als Fehler und läuft als Hub weiter. |
+| `osDependencies` in `io-package.json` installiert auf Linux immer `bluetooth`, `bluez`, `libbluetooth-dev`, `libudev-dev` und `libcap2-bin`. | Bleibt. Die Liste ist statisch und lässt sich nicht von der Konfiguration abhängig machen. Im Hub-Betrieb werden die Pakete nicht gebraucht. |
+
+Das `setcap` auf `node` aus dem README ist nur für den lokalen Scanner nötig. Das README bekommt einen eigenen Abschnitt für den Hub-Betrieb.
+
+Zu prüfen ist, was passiert, wenn die Installation der `osDependencies` fehlschlägt, zum Beispiel in einem Container ohne Paketquellen.
 
 ---
 
@@ -299,7 +313,7 @@ Dazu kommt instanzweit `firmware.updateAll`.
 ## 6. Konfiguration, Objekte, Admin
 
 - **Konfiguration `ble` (`native`):**
-  - lokaler Scanner `enabled` und `hciDevice` (wie heute)
+  - `localScanner` (an/aus, Standard an, siehe E8) und `hciDevice` (wie heute)
   - `server` (wie heute, wird zum Transport `noble-remote`)
   - pvvx-Driver: `autoTimeSync`, `timeSyncIntervalH`, `minBatteryForOta`
   - Für Gateways gibt es nichts zu konfigurieren. Sie erscheinen von selbst, sobald ein Adapter Pakete liefert.
@@ -326,7 +340,7 @@ Jede Phase ist für sich releasefähig.
 | Phase | Inhalt | Ergebnis / Abnahme | Größe |
 |---|---|---|---|
 | **0: Refactoring ohne Verhaltensänderung** | Aus `main.ts` werden `scanner/` (Dedupe, Drosselung, Plugin-Dispatch) und `transports/noble-local`, `noble-remote` extrahiert. `PeripheralInfo` wird ein eigener Typ. Dazu Unit-Tests für den Dispatch mit einem Fake-Transport. | Bestehende Tests sind grün, und identische Objekte und States entstehen im manuellen Test mit einem echten Dongle. | M |
-| **1a: Gateway-Schnittstelle in `ble` (Empfang)** | `gateway-protocol.ts`, Befehl `gateway:advertisements`, Transport `remote-gateway`, AD-Parser (mit Unit-Tests gegen echte Pakete), Registry mit Gateway pro Gerät, Dedupe, Offline-Erkennung. | Ein Testskript schickt aufgezeichnete Pakete per `sendTo` an `ble.0`. Die Sensoren landen mit korrekter MAC in den bestehenden Objekten, ohne doppelte Dekodierung. | L |
+| **1a: Gateway-Schnittstelle in `ble` (Empfang)** | `gateway-protocol.ts`, Befehl `gateway:advertisements`, Transport `remote-gateway`, AD-Parser (mit Unit-Tests gegen echte Pakete), Registry mit Gateway pro Gerät, Dedupe, Offline-Erkennung. Dazu der Hub-Betrieb ohne lokalen Stick (E8). | Ein Testskript schickt aufgezeichnete Pakete per `sendTo` an `ble.0`. Die Sensoren landen mit korrekter MAC in den bestehenden Objekten, ohne doppelte Dekodierung. Das funktioniert auch auf einem Host ohne Bluetooth-Hardware und ohne `noble`. | L |
 | **1b: `esphome` liefert Pakete** (PR in `ioBroker.esphome`) | Spike in `@2colors/esphome-native-api` (E7), Advertisement-Abo am ESP, sobald die Weiterleitung konfiguriert ist, Bündelung, Konfigurationsoption. | pvvx-/BTHome-Sensoren aus drei Stockwerken erscheinen in `ble`. Ohne konfigurierte Weiterleitung verhält sich `esphome` wie bisher. | S–M |
 | **2: GATT-Kern** | `ble`: `gateway:announce`, `connections/` mit Session, Queue, Leases, Slots, Timeouts, Retry über ein anderes Gateway, plus Debug-Befehle über `sendTo` für den PoC. `esphome`: `gateway:announce`, die `gatt:*`-Befehle, Meldung von `connectionState` und `notification`, Aufräumen, wenn `ble` stoppt. | Ein Characteristic eines Thermometers wird über einen entfernten Proxy gelesen und geschrieben, und das Verhalten bei parallelen Anfragen ist getestet. Stirbt `ble`, baut `esphome` die Verbindungen ab. | L |
 | **3: pvvx-Zeitsync** | `drivers/pvvx` mit Zeit lesen und setzen, Drift, Auslösern und DST-Erkennung. | Eine simulierte DST-Umstellung (Offset gemockt) synchronisiert alle Geräte gestaffelt, und `time.drift` ist danach ≈ 0. | M |
@@ -370,7 +384,7 @@ Phase 1a braucht den `esphome`-Adapter nicht: Die Schnittstelle lässt sich mit 
 5. **pvvx-Protokolldetails.** Payloads für Zeit und OTA sind im README nicht spezifiziert und müssen aus `TelinkMiFlasher.html` und `ble_ota.py` übernommen werden. Ein Risiko sind Unterschiede zwischen Firmwareversionen. Deshalb Version auslesen und gegen eine bekannte Liste prüfen.
 6. **Lasten bei vielen Proxies.** Jedes Advertisement kommt N-fach an. Dedupe muss vor dem Decoder und vor allen DB-Zugriffen passieren (der heutige `onDiscover` macht pro Paket mehrere `getStateAsync`/`objectExists`).
 7. **Verhältnis zu Upstream.** Das Repo ist ein Fork von `AlCalzone/ioBroker.ble`. Vor Phase 1 sollte geklärt werden, ob die Änderungen upstream gehen (dann Phase 0 als eigenen PR anbieten) oder der Fork eigenständig released wird.
-8. **Rechte und Plattform.** Die Gateway-Schnittstelle braucht in `ble` keine nativen Module und keine `cap_net_raw`-Rechte. Ein reines Proxy-Setup (ohne lokales Bluetooth) muss also auch in Docker ohne Host-Networking laufen. Dafür muss `noble` lazy bzw. optional geladen werden.
+8. **Hub-Betrieb ohne Bluetooth-Hardware.** Die Gateway-Schnittstelle braucht in `ble` keine nativen Module und keine `cap_net_raw`-Rechte. Die nötigen Änderungen stehen in E8. Offen ist dort nur das Verhalten der `osDependencies` bei fehlgeschlagener Installation.
 
 ---
 
