@@ -155,7 +155,9 @@
 		"server": "",
 		"plugins": "",
 		"allowEmptyDevices": false,
-		"rssiThrottle": 0
+		"rssiThrottle": 0,
+		"localScanner": true,
+		"gatewayTimeout": 60
 	},
 	"objects": [],
 	"instanceObjects": [
@@ -172,7 +174,7 @@
 			"type": "state",
 			"common": {
 				"role": "indicator.connected",
-				"name": "If BLE scan is active",
+				"name": "If at least one source of BLE advertisements is active",
 				"type": "boolean",
 				"read": true,
 				"write": false,
@@ -191,6 +193,14 @@
 				"read": true,
 				"write": false,
 				"def": "poweredOff"
+			},
+			"native": {}
+		},
+		{
+			"_id": "gateways",
+			"type": "channel",
+			"common": {
+				"name": "Sources of BLE advertisements"
 			},
 			"native": {}
 		},

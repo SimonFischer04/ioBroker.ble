@@ -11,5 +11,7 @@
 	"Settings": "Instellingen",
 	"Too frequent updates can slow down the admin.": "Te frequente updates kunnen vertragen de admin.",
 	"This will be automatically disabled after 5 minutes.": "Dit wordt automatisch uitgeschakeld na 5 minuten.",
-	"Accept new devices": "Nieuwe apparaten accepteren"
+	"Accept new devices": "Nieuwe apparaten accepteren",
+	"Use the Bluetooth adapter of this host": "Bluetooth-adapter van deze host gebruiken",
+	"When disabled, only advertisements delivered by other adapters are handled. No Bluetooth hardware is needed then.": "Indien uitgeschakeld, worden alleen advertenties verwerkt die door andere adapters worden geleverd. Er is dan geen Bluetooth-hardware nodig."
 }

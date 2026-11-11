@@ -100,9 +100,7 @@ function serializePeripheral(peripheral) {
     "addressType",
     "connectable",
     "advertisement",
-    "rssi",
-    "services",
-    "state"
+    "rssi"
   ]);
 }
 function onDiscover(peripheral) {

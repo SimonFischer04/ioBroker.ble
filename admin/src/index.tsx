@@ -182,6 +182,26 @@ const SettingsPageContent: React.FC = React.memo(() => {
 
 				<Grid item xs={6}>
 					<FormControlLabel
+						label={_("Use the Bluetooth adapter of this host")}
+						control={
+							<Checkbox
+								// Old configurations do not have this option
+								checked={settings.localScanner !== false}
+								onChange={(event, checked) =>
+									handleChange("localScanner", checked)
+								}
+							/>
+						}
+					/>
+					<Typography variant="body2">
+						{_(
+							"When disabled, only advertisements delivered by other adapters are handled. No Bluetooth hardware is needed then.",
+						)}
+					</Typography>
+				</Grid>
+
+				<Grid item xs={6}>
+					<FormControlLabel
 						label={_("Accept new devices")}
 						control={
 							<Checkbox

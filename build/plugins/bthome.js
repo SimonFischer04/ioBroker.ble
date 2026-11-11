@@ -18,9 +18,9 @@ const plugin = {
   advertisedServices: ["fcd2"],
   isHandling: (p) => {
     var _a, _b;
-    return (_b = (_a = p.advertisement) == null ? void 0 : _a.serviceData) == null ? void 0 : _b.some(
+    return !!((_b = (_a = p.advertisement) == null ? void 0 : _a.serviceData) == null ? void 0 : _b.some(
       (entry) => entry.uuid === "fcd2"
-    );
+    ));
   },
   createContext: (peripheral) => {
     const data = (0, import_plugin.getServiceData)(peripheral, "fcd2");

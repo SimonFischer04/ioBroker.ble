@@ -12,5 +12,7 @@
 	"Too frequent updates can slow down the admin.": "Aggiornamenti troppo frequenti possono rallentare l'admin.",
 	"on save adapter restarts with new config immediately": "salva adattatore riavvia con la nuova config immediatamente",
 	"This will be automatically disabled after 5 minutes.": "Questo verrà automaticamente disabilitato dopo 5 minuti.",
-	"Accept new devices": "Accetta nuovi dispositivi"
+	"Accept new devices": "Accetta nuovi dispositivi",
+	"Use the Bluetooth adapter of this host": "Usa l'adattatore Bluetooth di questo host",
+	"When disabled, only advertisements delivered by other adapters are handled. No Bluetooth hardware is needed then.": "Se disattivato, vengono elaborati solo gli annunci forniti da altri adattatori. In tal caso non è necessario alcun hardware Bluetooth."
 }

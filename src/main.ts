@@ -1,59 +1,25 @@
 import * as utils from "@iobroker/adapter-core";
-import { entries } from "alcalzone-shared/objects";
-import { exec, fork, type ChildProcess } from "child_process";
-import * as path from "path";
+import { createMessageHandler } from "./api/message-handler";
+import { DeviceRegistry } from "./devices/device-registry";
+import { GatewayRegistry } from "./gateways/gateway-registry";
+import type { PeripheralInfo } from "./lib/advertisement";
 import { Global as _ } from "./lib/global";
-import {
-	extendChannel,
-	extendDevice,
-	extendState,
-} from "./lib/iobroker-objects";
 import { ObjectCache } from "./lib/object-cache";
-import {
-	ScanExitCodes,
-	getMessageReviver,
-	type PeripheralInfo,
-	type ScanMessage,
-} from "./lib/scanProcessInterface";
 // Load all registered plugins
-import { Socket } from "net";
 import plugins from "./plugins";
-import type { Plugin } from "./plugins/plugin";
+import { AdvertisementProcessor } from "./scanner/advertisement-processor";
+import { fixServiceName, matchesServiceFilter } from "./scanner/service-filter";
+import { NobleLocalTransport } from "./transports/noble-local";
+import { NobleRemoteTransport } from "./transports/noble-remote";
+import { RemoteGatewayTransport } from "./transports/remote-gateway";
+import type { Transport, TransportContext } from "./transports/transport";
 
-let enabledPlugins: Plugin[];
-let services: string[] = [];
-
-/** Whether new devices may be recorded */
-let allowNewDevices = false;
-let resetAllowNewDevicesTimeout: NodeJS.Timeout | undefined;
-
-function autoResetAllowNewDevices() {
-	if (resetAllowNewDevicesTimeout) clearTimeout(resetAllowNewDevicesTimeout);
-
-	// After 5 minutes, reset it to false
-	resetAllowNewDevicesTimeout = setTimeout(() => {
-		allowNewDevices = false;
-		_.adapter.setState("options.allowNewDevices", false, true);
-		resetAllowNewDevicesTimeout = undefined;
-
-		_.adapter.log.info(
-			"No longer accepting new devices (automatic timeout)",
-		);
-	}, 5000 * 60);
-}
-
-/** Cache of new devices we already ignored */
-const ignoredNewDeviceIDs = new Set<string>();
-
-// /** MAC addresses of known devices */
-// let knownDevices: string[] = [];
-
-/** How frequent the RSSI of devices should be updated */
-let rssiUpdateInterval = 0;
-
-/** A reference to the scanning process */
-let scanProcess: ChildProcess | undefined;
-let socket: Socket | undefined;
+let processor: AdvertisementProcessor | undefined;
+let gateways: GatewayRegistry | undefined;
+let remoteGateway: RemoteGatewayTransport | undefined;
+let handleMessage: ((obj: ioBroker.Message) => void) | undefined;
+/** The sources of advertisements that are in use */
+const transports: Transport[] = [];
 
 // Adapter-Objekt erstellen
 const adapter = utils.adapter({
@@ -80,7 +46,7 @@ const adapter = utils.adapter({
 			.split(",")
 			.map((p: string) => p.trim().toLowerCase())
 			.concat("_default");
-		enabledPlugins = plugins.filter(
+		const enabledPlugins = plugins.filter(
 			(p) => enabledPluginNames.indexOf(p.name.toLowerCase()) > -1,
 		);
 		_.adapter.log.info(
@@ -88,11 +54,11 @@ const adapter = utils.adapter({
 		);
 
 		// Bring the monitored service names into the correct form
+		let services: string[] = [];
 		if (adapter.config.services === "*") {
-			services = [];
 			_.adapter.log.info(`monitoring all services`);
 		} else {
-			services = (adapter.config.services as string)
+			services = ((adapter.config.services as string) || "")
 				.split(",") // get manually defined services
 				.concat(...enabledPlugins.map((p) => p.advertisedServices)) // concat with plugin-defined ones
 				.reduce((acc, s) => acc.concat(s), [] as string[]) // flatten the arrays
@@ -107,12 +73,51 @@ const adapter = utils.adapter({
 		}
 
 		// Limit RSSI updates
+		let rssiUpdateInterval = 0;
 		if (adapter.config.rssiThrottle != null) {
 			rssiUpdateInterval = Math.max(
 				0,
 				Math.min(10000, adapter.config.rssiThrottle),
 			);
 		}
+
+		// The gateways are the sources of advertisements: the local Bluetooth adapter,
+		// a remote scan server, and those other adapters deliver advertisements for
+		const gatewayTimeout =
+			typeof adapter.config.gatewayTimeout === "number" &&
+			adapter.config.gatewayTimeout > 0
+				? adapter.config.gatewayTimeout
+				: 60;
+		gateways = new GatewayRegistry(adapter, {
+			remoteTimeoutMs: gatewayTimeout * 1000,
+		});
+		await gateways.init();
+
+		const devices = new DeviceRegistry();
+		processor = new AdvertisementProcessor(
+			{
+				plugins: enabledPlugins,
+				allowEmptyDevices: !!adapter.config.allowEmptyDevices,
+				rssiUpdateInterval,
+			},
+			devices,
+			gateways,
+		);
+		const handleAdvertisement = (peripheral: PeripheralInfo): void => {
+			processor!.process(peripheral).catch((e) => {
+				adapter.log.error(
+					`Could not handle the advertisement of ${peripheral.address}: ${
+						(e as Error).message
+					}`,
+				);
+			});
+		};
+		const transportContext: TransportContext = {
+			adapter,
+			gateways,
+			onAdvertisement: handleAdvertisement,
+		};
+
 		// monitor our own states and objects
 		adapter.subscribeStates("*");
 		adapter.subscribeObjects("*");
@@ -121,20 +126,53 @@ const adapter = utils.adapter({
 		// bis der User es explizit erlaubt.
 		await adapter.setStateAsync("options.allowNewDevices", false, true);
 
+		// Other adapters can always deliver advertisements. The local scanner applies the
+		// service filter while scanning, for those advertisements we have to do it here.
+		remoteGateway = new RemoteGatewayTransport({
+			...transportContext,
+			onAdvertisement: (peripheral) => {
+				if (matchesServiceFilter(peripheral, services)) {
+					handleAdvertisement(peripheral);
+				}
+			},
+		});
+		transports.push(remoteGateway);
+		handleMessage = createMessageHandler({
+			adapter,
+			gateways,
+			devices,
+			remoteGateway,
+		});
+
 		// And start scanning
-		if (!process.env.TESTING) {
-			if (adapter.config.server) {
-				connectToBLEServer();
-			} else {
-				startScanProcess();
-			}
+		if (adapter.config.server) {
+			transports.push(
+				new NobleRemoteTransport(
+					transportContext,
+					adapter.config.server,
+				),
+			);
+		} else if (adapter.config.localScanner !== false) {
+			transports.push(
+				new NobleLocalTransport(transportContext, {
+					services,
+					hciDevice: adapter.config.hciDevice,
+				}),
+			);
+		} else {
+			adapter.log.info(
+				"The local Bluetooth adapter is not used, waiting for advertisements from external gateways",
+			);
 		}
+		for (const transport of transports) transport.start();
 	},
 
 	// is called when adapter shuts down - callback has to be called under any circumstances!
 	unload: (callback) => {
 		try {
-			scanProcess?.kill();
+			for (const transport of transports) transport.stop();
+			processor?.dispose();
+			gateways?.dispose();
 		} catch {}
 		callback();
 	},
@@ -154,391 +192,33 @@ const adapter = utils.adapter({
 	stateChange: (id, state) => {
 		if (
 			/options\.allowNewDevices$/.test(id) &&
+			id.startsWith(adapter.namespace) &&
 			state != undefined &&
 			!state.ack
 		) {
-			if (
-				typeof state.val === "boolean" &&
-				state.val !== allowNewDevices
-			) {
-				allowNewDevices = state.val;
+			if (typeof state.val === "boolean") {
 				// ACK the state change
 				_.adapter.setState(id, state.val, true);
-				_.adapter.log.info(
-					allowNewDevices
-						? "Now accepting new devices"
-						: "No longer accepting new devices",
-				);
-
-				if (allowNewDevices) {
-					// Whenever allowNewDevices is set to true,
-					// forget all devices we previously ignored
-					ignoredNewDeviceIDs.clear();
-					// Clear or restart the auto-reset timer
-					autoResetAllowNewDevices();
-				}
+				processor?.setAllowNewDevices(state.val);
 			}
+			return;
 		}
+
+		// When an instance that delivers advertisements stops, its gateways are offline
+		remoteGateway?.handleStateChange(id, state);
 	},
 
-	message: async (obj) => {
-		// responds to the adapter that sent the original message
-		function respond(response: any) {
-			if (obj.callback)
-				adapter.sendTo(obj.from, obj.command, response, obj.callback);
-		}
-		// some predefined responses so we only have to define them once
-		const predefinedResponses = {
-			ACK: { error: null },
-			OK: { error: null, result: "ok" },
-			ERROR_UNKNOWN_COMMAND: { error: "Unknown command!" },
-			MISSING_PARAMETER: (paramName: string) => {
-				return { error: 'missing parameter "' + paramName + '"!' };
-			},
-			COMMAND_RUNNING: { error: "command running" },
-		};
-		// make required parameters easier
-		// function requireParams(params: string[]) {
-		// 	if (!(params && params.length)) return true;
-		// 	for (const param of params) {
-		// 		if (!(obj.message && obj.message.hasOwnProperty(param))) {
-		// 			respond(predefinedResponses.MISSING_PARAMETER(param));
-		// 			return false;
-		// 		}
-		// 	}
-		// 	return true;
-		// }
-
-		// handle the message
-		if (obj) {
-			switch (obj.command) {
-				case "getHCIPorts":
-					exec("hciconfig | grep hci", (error, stdout, _stderr) => {
-						// hci1:   Type: BR/EDR  Bus: USB
-						// hci0:   Type: BR/EDR  Bus: UART
-						if (error != null) {
-							respond({ error });
-							return;
-						}
-						// parse index and bus type
-						const ports: { index: number; bus: string }[] = [];
-						const regex = /^hci(\d+)\:.+Bus\:\s(\w+)$/gm;
-						let result: RegExpExecArray | null;
-
-						while (true) {
-							result = regex.exec(stdout);
-							if (!(result && result.length)) break;
-							const port = { index: +result[1], bus: result[2] };
-							ports.push(port);
-						}
-						respond({ error: null, result: ports });
-					});
-					return;
-				default:
-					respond(predefinedResponses.ERROR_UNKNOWN_COMMAND);
-					return;
-			}
+	message: (obj) => {
+		if (handleMessage) {
+			handleMessage(obj);
+		} else if (obj?.callback) {
+			// The adapter is still starting
+			adapter.sendTo(
+				obj.from,
+				obj.command,
+				{ error: "The adapter is not ready yet" },
+				obj.callback,
+			);
 		}
 	},
 });
-
-function startScanProcess() {
-	const args: string[] = ["-s", ...services];
-	if (adapter.config.hciDevice) {
-		args.push("-d", adapter.config.hciDevice.toString());
-	}
-	adapter.log.info("starting scanner process...");
-	scanProcess = fork(path.join(__dirname, "scanProcess"), args, {
-		stdio: ["pipe", "pipe", "pipe", "ipc"],
-	}).on("exit", (code, signal) => {
-		if (
-			!signal &&
-			code !== 0 &&
-			code !== ScanExitCodes.RequireNobleFailed
-		) {
-			adapter.log.warn("scanner process crashed, restarting...");
-			setImmediate(startScanProcess);
-		} else {
-			scanProcess = undefined;
-		}
-	});
-	scanProcess.on("message", getMessageReviver(handleMessage));
-}
-
-function connectToBLEServer() {
-	socket = new Socket();
-
-	const reviver = getMessageReviver(handleMessage);
-	let receiveBuffer = "";
-
-	socket
-		.on("close", () => {
-			adapter.log.info("Disconnected from BLE server");
-			adapter.setState("info.connection", false, true);
-		})
-		.on("connect", () => {
-			adapter.log.info("Connected to BLE server");
-			adapter.setState("info.connection", true, true);
-		})
-		.on("data", (data) => {
-			// Each message ends with a newline. We might receive multiple messages at once,
-			// and we might also receive incomplete messages.
-			receiveBuffer += data.toString();
-			let newlineIndex: number;
-			while ((newlineIndex = receiveBuffer.indexOf("\n")) > -1) {
-				const line = receiveBuffer.slice(0, newlineIndex);
-				receiveBuffer = receiveBuffer.slice(newlineIndex + 1);
-				try {
-					const msg = JSON.parse(line);
-					reviver(msg);
-				} catch (e) {
-					console.error(e);
-					console.error("data was: " + line);
-				}
-			}
-		});
-
-	const [host, port] = adapter.config.server.split(":", 2);
-
-	adapter.log.info("connecting to BLE server...");
-	socket.connect({
-		host,
-		port: +port,
-	});
-}
-
-function handleMessage(message: ScanMessage) {
-	switch (message.type) {
-		case "connected":
-			adapter.setState("info.connection", true, true);
-			break;
-		case "disconnected":
-			adapter.setState("info.connection", false, true);
-			break;
-		case "discover":
-			onDiscover(message.peripheral);
-			break;
-		case "driverState":
-			adapter.setState("info.driverState", message.driverState, true);
-			break;
-		case "error": // fall through
-		case "fatal":
-			handleScanProcessError(message.error);
-			break;
-		case "log":
-			adapter.log[message.level ?? "info"](message.message);
-			break;
-	}
-}
-
-function fixServiceName(name: string | null | undefined): string {
-	if (name == null) return "";
-	name = name.trim();
-	// No whitespace
-	for (const char of ["\r", "\n", "\t", " "]) {
-		name = name.replace(char, "");
-	}
-	// No leading 0x
-	name = name.replace(/^0x/, "");
-	// lowerCase
-	return name.toLowerCase();
-}
-
-async function onDiscover(peripheral: PeripheralInfo) {
-	if (peripheral == null) return;
-
-	let serviceDataIsNotEmpty = false;
-	let manufacturerDataIsNotEmpty = false;
-
-	_.adapter.log.debug(`discovered peripheral ${peripheral.address}`);
-	_.adapter.log.debug(
-		`  has advertisement: ${peripheral.advertisement != null}`,
-	);
-	if (peripheral.advertisement != null) {
-		_.adapter.log.debug(
-			`  has serviceData: ${
-				peripheral.advertisement.serviceData != null
-			}`,
-		);
-		if (peripheral.advertisement.serviceData != null) {
-			_.adapter.log.debug(
-				`  serviceData = ${JSON.stringify(
-					peripheral.advertisement.serviceData,
-				)}`,
-			);
-			serviceDataIsNotEmpty =
-				peripheral.advertisement.serviceData.length > 0;
-		}
-		_.adapter.log.debug(
-			`  has manufacturerData: ${
-				peripheral.advertisement.manufacturerData != null
-			}`,
-		);
-		if (peripheral.advertisement.manufacturerData != null) {
-			_.adapter.log.debug(
-				`  manufacturerData = ${peripheral.advertisement.manufacturerData.toString(
-					"hex",
-				)}`,
-			);
-			manufacturerDataIsNotEmpty =
-				peripheral.advertisement.manufacturerData.length > 0;
-		}
-	} else {
-		// don't create devices for peripherals without advertised data
-		return;
-	}
-	// create devices if we selected to allow empty devices
-	// or the peripheral transmits serviceData or manufacturerData
-	if (
-		!adapter.config.allowEmptyDevices &&
-		!serviceDataIsNotEmpty &&
-		!manufacturerDataIsNotEmpty
-	) {
-		return;
-	}
-
-	const deviceId = peripheral.address;
-
-	// find out which plugin is handling this
-	let plugin: Plugin | undefined;
-	for (const p of enabledPlugins) {
-		if (p.isHandling(peripheral)) {
-			_.adapter.log.debug(`plugin ${p.name} is handling ${deviceId}`);
-			plugin = p;
-			break;
-		}
-	}
-	if (!plugin) {
-		_.adapter.log.warn(
-			`no handling plugin found for peripheral ${peripheral.id}`,
-		);
-		return;
-	}
-
-	// Test if we may record this device
-	if (!allowNewDevices) {
-		// We may not. First test if we already ignored this device
-		if (ignoredNewDeviceIDs.has(deviceId)) return;
-		// If not, check if the RSSI object exists, as that exists for every one
-		if (
-			!(await _.objectCache.objectExists(
-				`${_.adapter.namespace}.${deviceId}.rssi`,
-			))
-		) {
-			// This is a new device. Remember that we need to ignore it
-			ignoredNewDeviceIDs.add(deviceId);
-			return;
-		}
-		// This is a known device
-	}
-
-	// Always ensure the rssi state exists and gets a value
-	await extendState(`${deviceId}.rssi`, {
-		id: "rssi",
-		common: {
-			role: "value.rssi",
-			name: "signal strength (RSSI)",
-			desc: "Signal strength of the device",
-			type: "number",
-			read: true,
-			write: false,
-		},
-		native: {},
-	});
-	// update RSSI information
-	const rssiState = await adapter.getStateAsync(`${deviceId}.rssi`);
-	if (
-		rssiState == null ||
-		// Allow updating the unchanged state because some people use it for presence detection
-		rssiState.ts + rssiUpdateInterval < Date.now() // But don't update too frequently
-	) {
-		_.adapter.log.debug(`updating rssi state for ${deviceId}`);
-		await adapter.setStateAsync(`${deviceId}.rssi`, peripheral.rssi, true);
-	}
-
-	// Now update device-specific objects and states
-	const context = plugin.createContext(peripheral);
-	const objects = plugin.defineObjects(context);
-	const values = plugin.getValues(context);
-
-	// We can't do anything without objects
-	if (objects == null) return;
-
-	// Ensure the device object exists
-	await extendDevice(deviceId, peripheral, objects.device);
-	// Ensure the channel objects exist (optional)
-	if (objects.channels != null && objects.channels.length > 0) {
-		await Promise.all(
-			objects.channels.map((c) =>
-				extendChannel(deviceId + "." + c.id, c),
-			),
-		);
-	}
-	// Ensure the state objects exist. These might change in every advertisement frame
-	await Promise.all(
-		objects.states.map((s) => extendState(deviceId + "." + s.id, s)),
-	);
-
-	// Now fill the states with values
-	if (values != null) {
-		_.adapter.log.debug(
-			`${deviceId} > got values: ${JSON.stringify(values)}`,
-		);
-		// eslint-disable-next-line prefer-const
-		for (let [stateId, value] of entries(values)) {
-			// Fix special chars
-			stateId = stateId.replace(/[\(\)]+/g, "").replace(" ", "_");
-			// set the value if there's an object for the state
-			const iobStateId = `${adapter.namespace}.${deviceId}.${stateId}`;
-			if ((await _.objectCache.getObject(iobStateId)) != null) {
-				_.adapter.log.debug(`setting state ${iobStateId}`);
-				await adapter.setStateChangedAsync(
-					iobStateId,
-					value ?? null,
-					true,
-				);
-			} else {
-				_.adapter.log.warn(
-					`skipping state ${iobStateId} because the object does not exist`,
-				);
-			}
-		}
-	} else {
-		_.adapter.log.debug(`${deviceId} > got no values`);
-	}
-}
-
-function handleScanProcessError(err: Error) {
-	if (
-		/compatible USB Bluetooth/.test(err.message) ||
-		/LIBUSB_ERROR_NOT_SUPPORTED/.test(err.message)
-	) {
-		terminate("No compatible BLE 4.0 hardware found!");
-	} else if (
-		/NODE_MODULE_VERSION/.test(err.message) &&
-		adapter.supportsFeature?.("CONTROLLER_NPM_AUTO_REBUILD")
-	) {
-		terminate("A dependency requires a rebuild.", 13);
-	} else if (err.message.includes(`The value of "offset" is out of range`)) {
-		// ignore, this happens in noble sometimes
-		(adapter?.log ?? console).error(err.message);
-	} else if (err.message.includes("EAFNOSUPPORT")) {
-		terminate(
-			"Unsupported Address Family (EAFNOSUPPORT). If ioBroker is running in a Docker container, make sure that the container uses host mode networking.",
-		);
-	} else {
-		// This is something unexpected. We don't want to bring down the main process, so just log it
-		(adapter?.log ?? console).error(err.message);
-	}
-}
-
-function terminate(
-	reason: string = "no reason given",
-	exitCode: number = 11,
-): never {
-	if (adapter) {
-		adapter.log.error(`Terminating because ${reason}`);
-		adapter.terminate?.(reason, exitCode);
-	}
-	return process.exit(exitCode);
-}
