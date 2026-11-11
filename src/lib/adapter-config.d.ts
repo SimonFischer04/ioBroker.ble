@@ -9,6 +9,13 @@ declare global {
 			plugins: string;
 			allowEmptyDevices: boolean;
 			rssiThrottle: number;
+			/**
+			 * Whether the Bluetooth adapter of this host is used. When disabled, the adapter only
+			 * handles advertisements other adapters deliver. Missing in old configurations = true.
+			 */
+			localScanner?: boolean;
+			/** After how many seconds without advertisements an external gateway is offline */
+			gatewayTimeout?: number;
 		}
 	}
 }

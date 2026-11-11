@@ -11,5 +11,7 @@
 	"Settings": "Параметры",
 	"Too frequent updates can slow down the admin.": "Слишком частые обновления могут замедлить админ.",
 	"This will be automatically disabled after 5 minutes.": "Это будет автоматически отключено через 5 минут.",
-	"Accept new devices": "Принимать новые устройства"
+	"Accept new devices": "Принимать новые устройства",
+	"Use the Bluetooth adapter of this host": "Использовать Bluetooth-адаптер этого хоста",
+	"When disabled, only advertisements delivered by other adapters are handled. No Bluetooth hardware is needed then.": "Если отключено, обрабатываются только пакеты, доставленные другими адаптерами. Оборудование Bluetooth в этом случае не требуется."
 }
