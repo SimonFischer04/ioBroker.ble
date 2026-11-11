@@ -1,6 +1,6 @@
 # Plan: zentrale Bluetooth-Infrastruktur in `ioBroker.ble`
 
-Status: Entwurf · Stand 2026-11-11
+Status: Phase 0 und 1a umgesetzt · Stand 2026-11-11
 
 Ziel: `ioBroker.ble` wird die zentrale BLE-Schicht für ioBroker. Er stellt mehrere Empfänger (ESPHome-Bluetooth-Proxies, lokaler Dongle) bereit, macht aktive GATT-Verbindungen möglich und bietet anderen Adaptern eine API. Der konkrete Anlass sind pvvx-Thermometer ([ATC_MiThermometer](https://github.com/pvvx/ATC_MiThermometer)), deren Uhrzeit automatisch synchronisiert werden soll (inklusive Sommer-/Winterzeit) und auf die Firmware-Updates ausgerollt werden sollen.
 
@@ -337,6 +337,8 @@ Dazu kommt instanzweit `firmware.updateAll`.
 
 Jede Phase ist für sich releasefähig.
 
+**Stand der Umsetzung:** Phase 0 und Phase 1a sind umgesetzt, siehe Abschnitt „Umgesetzt“ am Ende dieses Kapitels.
+
 | Phase | Inhalt | Ergebnis / Abnahme | Größe |
 |---|---|---|---|
 | **0: Refactoring ohne Verhaltensänderung** | Aus `main.ts` werden `scanner/` (Dedupe, Drosselung, Plugin-Dispatch) und `transports/noble-local`, `noble-remote` extrahiert. `PeripheralInfo` wird ein eigener Typ. Dazu Unit-Tests für den Dispatch mit einem Fake-Transport. | Bestehende Tests sind grün, und identische Objekte und States entstehen im manuellen Test mit einem echten Dongle. | M |
@@ -352,6 +354,39 @@ Jede Phase ist für sich releasefähig.
 Den PoC aus der Diskussion („ESPHome-Proxy, GATT-Verbindung über `sendToAsync`, lesen und schreiben“) decken die Phasen 1 und 2 ab. Phase 0 lohnt sich trotzdem vorab: Sie ist klein und verhindert, dass der Umbau in den 544 Zeilen von `main.ts` landet.
 
 Phase 1a braucht den `esphome`-Adapter nicht: Die Schnittstelle lässt sich mit einem Skript und aufgezeichneten Paketen testen. Phase 1b ist danach ein kleiner PR in `ioBroker.esphome`, der parallel zu Phase 2 laufen kann.
+
+### Umgesetzt (Phase 0 und 1a)
+
+| Modul | Inhalt |
+|---|---|
+| `src/lib/advertisement.ts` | Eigener Typ `PeripheralInfo`, unabhängig von `noble` |
+| `src/lib/ad-parser.ts` | Parser für die rohen AD-Strukturen |
+| `src/lib/gateway-protocol.ts` | Typen der Gateway-Schnittstelle, ohne Abhängigkeiten, zum Kopieren |
+| `src/transports/` | `noble-local` (Kindprozess), `noble-remote` (Option `server`), `remote-gateway` (`gateway:advertisements`) |
+| `src/gateways/gateway-registry.ts` | Alle Quellen, ihr Online-Status, die States `gateways.*` und `info.connection` |
+| `src/devices/device-registry.ts` | Welches Gateway empfängt welches Gerät wie gut, Dedupe |
+| `src/scanner/` | Verarbeitung der Advertisements (vorher `onDiscover` in `main.ts`), Service-Filter |
+| `src/api/message-handler.ts` | `sendTo`-Befehle |
+
+Abweichungen vom Plan:
+
+- **Service-Filter für gelieferte Pakete.** Der lokale Scanner filtert schon beim Scannen auf die überwachten Services. Für Pakete von Gateways wendet `ble` dieselbe Regel selbst an. Sonst würde bei „Neue Geräte erlauben“ jedes BLE-Gerät in Reichweite eines Proxys angelegt.
+- **`getGateways` und `getDevices` gibt es schon jetzt** (geplant für Phase 5), weil die Tests sie brauchen.
+- **Kein State `<device>.gateway`.** Welches Gateway ein Gerät am besten empfängt, liefert vorerst nur `getDevices`.
+- **Der Remote-Server (Option `server`) verbindet sich neu**, wenn die Verbindung abbricht. Vorher ist der Adapter in diesem Fall abgestürzt und wurde neu gestartet.
+- **Admin:** Es gibt die Option „Bluetooth-Adapter dieses Hosts verwenden“. Die Anzeige der Gateways fehlt noch.
+- **`gatewayTimeout`** (Sekunden, Standard 60) ist eine Einstellung ohne Feld in der Admin-UI. Die Tests setzen sie auf 2.
+
+Integrationstests liegen in `test/integrationTests/`, nach dem Muster des `v2`-Branches von `ioBroker.esphome`: Jede Suite exportiert `runTests(suite)` und ist in `index.js` registriert. Sie starten den echten Adapter in einer Test-Installation und liefern Pakete so, wie es ein anderer Adapter tut, per `sendTo`. Hardware brauchen sie nicht.
+
+| Suite | Prüft |
+|---|---|
+| `hub_mode_tests.js` | Betrieb ohne lokalen Bluetooth-Adapter, und mit aktiviertem Adapter auf einem Host ohne Hardware |
+| `gateway_advertisement_tests.js` | Echte Pakete (BTHome, Xiaomi, RuuviTag, unbekanntes Gerät) bis zu den States, ungültige Nachrichten, neue Geräte, Service-Filter |
+| `multi_gateway_tests.js` | Dasselbe Gerät über mehrere Gateways: einmal dekodiert, bester RSSI |
+| `gateway_lifecycle_tests.js` | Gateway erscheint, geht offline (Timeout, Absender gestoppt) und kommt zurück |
+
+Noch offen aus E8: Was passiert, wenn die Installation der `osDependencies` fehlschlägt.
 
 ### Teststrategie
 
