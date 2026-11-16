@@ -60,6 +60,8 @@ const valueTransforms: Partial<
 	// TODO: find a nicer way to specify the bit size of temperature - this information exists in the packet!
 	Temperature: (val) => ({ temperature: toSigned(val, 16) / 10 }),
 	Humidity: (val) => ({ humidity: val / 10 }),
+	// Faulty sensor readings must not overwrite the last valid soil moisture.
+	Moisture: (val) => (val >= 0 && val <= 100 ? { moisture: val } : {}),
 	TemperatureAndHumidity: (val) => ({
 		// the data is read in little-endian (reverse) order,
 		// so val = 0xHHHHTTTT

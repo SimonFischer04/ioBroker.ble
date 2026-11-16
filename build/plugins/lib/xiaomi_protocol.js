@@ -64,6 +64,7 @@ const valueTransforms = {
   },
   Temperature: (val) => ({ temperature: toSigned(val, 16) / 10 }),
   Humidity: (val) => ({ humidity: val / 10 }),
+  Moisture: (val) => val >= 0 && val <= 100 ? { moisture: val } : {},
   TemperatureAndHumidity: (val) => ({
     humidity: (val >>> 16) / 10,
     temperature: toSigned(val & 65535, 16) / 10

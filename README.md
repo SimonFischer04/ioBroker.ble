@@ -46,6 +46,7 @@ If you have any device transmitting specially encoded information via advertisem
 -->
 ### __WORK IN PROGRESS__
 * Fixed discovery and decoding of Ruuvi Tag manufacturer-only advertisements, including packets received after empty or unrelated frames.
+* Ignore invalid Mi Flora soil moisture readings above 100% to preserve the last valid measurement.
 
 ### 0.14.1 (2025-02-09)
 * Fixed compatibility issues with newer OS and Node.js versions (#874)
