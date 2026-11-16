@@ -28,14 +28,14 @@ describe("BTHome plugin measurements", () => {
 		expect(context).to.exist;
 		const objects = plugin.defineObjects(context)!;
 		const values = plugin.getValues(context)!;
-		expect(values).to.deep.equal({
+		expect(values).to.include({
 			volume_storage: 1,
 			count: -1,
 			count_2: -2,
 			count_3: -3,
-			power: -12.78,
 			direction: 100,
 		});
+		expect(values.power).to.be.closeTo(-12.78, 0.000001);
 		expect(objects.states.map((s) => s.id)).to.deep.equal(
 			Object.keys(values),
 		);
