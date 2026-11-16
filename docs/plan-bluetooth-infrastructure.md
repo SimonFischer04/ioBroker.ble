@@ -1,6 +1,26 @@
 # Plan: zentrale Bluetooth-Infrastruktur in `ioBroker.ble`
 
-Status: Phase 0, 1a und 1b umgesetzt · Stand 2026-11-16
+Status: Phase 0, 1a und 1b umgesetzt, Phase 2 spezifiziert · Stand 2026-11-17
+
+## Wie dieses Dokument zu lesen ist
+
+Dieses Dokument beschreibt **Architektur und Entscheidungen**. Es ist keine Arbeitsanweisung. Wer eine Phase umsetzt, arbeitet nach der Spezifikation dieser Phase. Wo Plan und Spezifikation sich widersprechen, gilt die Spezifikation.
+
+| Dokument | Zweck |
+|---|---|
+| `AGENTS.md` (im Repo-Stamm) | Aufbau des Codes, wie er jetzt ist, Regeln, Befehle, Stolperfallen |
+| `docs/plan-bluetooth-infrastructure.md` (dieses) | Warum es so gebaut wird: Zielbild, Entscheidungen E1–E8, Phasen, Risiken |
+| `docs/spec-phase-2-gatt.md` | Verbindliche Umsetzung von Phase 2, für beide Repos |
+
+| Phase | Stand | Spezifikation |
+|---|---|---|
+| 0, 1a | umgesetzt (dieses Repo) | – |
+| 1b | umgesetzt (`DrozmotiX/ioBroker.esphome`, Branch `ccr-ble-gateway-forwarding`) | – |
+| 2 | offen | `docs/spec-phase-2-gatt.md` |
+| 3, 4 | **blockiert**: Das pvvx-Protokoll ist nicht spezifiziert (Abschnitt 5). Erst `docs/pvvx-protocol.md` erstellen, dann die Spezifikation. | fehlt |
+| 5, 6 | offen | fehlt |
+
+Eine Phase ohne Spezifikation wird nicht umgesetzt.
 
 Ziel: `ioBroker.ble` wird die zentrale BLE-Schicht für ioBroker. Er stellt mehrere Empfänger (ESPHome-Bluetooth-Proxies, lokaler Dongle) bereit, macht aktive GATT-Verbindungen möglich und bietet anderen Adaptern eine API. Der konkrete Anlass sind pvvx-Thermometer ([ATC_MiThermometer](https://github.com/pvvx/ATC_MiThermometer)), deren Uhrzeit automatisch synchronisiert werden soll (inklusive Sommer-/Winterzeit) und auf die Firmware-Updates ausgerollt werden sollen.
 
@@ -14,7 +34,9 @@ Grundsätze aus der Vorab-Diskussion:
 
 ---
 
-## 1. Ist-Zustand im Code
+## 1. Ausgangslage vor Phase 0
+
+Dieser Abschnitt beschreibt den Code, wie er **vor** dem Umbau war. Er erklärt, warum die Phasen so geschnitten sind. Den heutigen Aufbau beschreibt `AGENTS.md`.
 
 | Datei | Aufgabe heute | Bewertung für den Umbau |
 |---|---|---|
@@ -118,69 +140,34 @@ Zu prüfen ist, was passiert, wenn die Installation der `osDependencies` fehlsch
 
 ---
 
-## 3. Interne Schnittstellen (Skizze)
+## 3. Interne Schnittstellen
+
+Umgesetzt sind `Transport` und `TransportContext` (`src/transports/transport.ts`), `PeripheralInfo` (`src/lib/advertisement.ts`), `GatewayRegistry` und `DeviceRegistry`. Sie weichen von der ursprünglichen Skizze ab: Transporte bekommen ihre Abhängigkeiten als `TransportContext` und melden Gateways bei der `GatewayRegistry`, statt Events zu senden. Maßgeblich ist der Code.
+
+Für Phase 2 kommen `GattLink`, `GattSession` und `ConnectionManager` hinzu. Ihre genaue Form steht in `docs/spec-phase-2-gatt.md`, Schritt B6. Die Idee dahinter:
+
+- Ein **Link** ist eine offene Verbindung über genau ein Gateway und kennt nur Handles.
+- Eine **Session** legt UUIDs darüber: Wer sie nutzt, nennt Service und Characteristic und weiß nicht, über welches Gateway die Verbindung läuft.
+- Der **Connection Manager** sorgt dafür, dass pro Gerät immer nur ein Auftrag läuft, wählt das Gateway und trennt die Verbindung in jedem Fall wieder.
+
+Für Phase 3 ist ein Driver-Interface vorgesehen. Das Folgende ist eine **Skizze, nicht verbindlich**. Die Spezifikation von Phase 3 legt es fest:
 
 ```ts
-// transports/transport.ts
-export interface Transport extends EventEmitter {
-	readonly id: string;                      // "esphome:proxy-og", "local:hci0"
-	readonly capabilities: { scan: boolean; connect: boolean; maxConnections?: number };
-	start(): Promise<void>;
-	stop(): Promise<void>;
-	// events: "advertisement"(Advertisement), "state"(TransportState), "slots"(free:number)
-
-	connect?(address: string, opts: ConnectOptions): Promise<GattLink>;
-}
-
-export interface Advertisement {           // ersetzt Pick<noble.Peripheral>
-	address: string;                        // "a4:c1:38:xx:xx:xx" (lowercase, wie heute)
-	addressType: "public" | "random" | "unknown";
-	rssi: number;
-	gatewayId: string;
-	connectable?: boolean;
-	advertisement: {
-		localName?: string;
-		serviceUuids?: string[];
-		serviceData?: { uuid: string; data: Buffer }[];
-		manufacturerData?: Buffer;
-	};
-}
-
-// connections/gatt-session.ts – was Driver und API nutzen
-export interface GattSession {
-	readonly address: string;
-	readonly gatewayId: string;
-	readonly mtu: number;
-	services(): Promise<GattService[]>;          // gecacht pro Gerät
-	read(svc: string, chr: string): Promise<Buffer>;
-	write(svc: string, chr: string, data: Buffer, withResponse?: boolean): Promise<void>;
-	subscribe(svc: string, chr: string, cb: (data: Buffer) => void): Promise<() => Promise<void>>;
-	close(): Promise<void>;
-}
-
-export interface ConnectionManager {
-	withSession<T>(
-		address: string,
-		fn: (s: GattSession) => Promise<T>,
-		opts?: { priority?: number; timeoutMs?: number; preferGateway?: string; owner?: string },
-	): Promise<T>;                              // Queue + Lease + Retry + garantiertes close()
-}
-
 // drivers/driver.ts – aktive Geräteprotokolle
 export interface Driver {
 	name: string;
-	matches(adv: Advertisement): boolean;       // z. B. pvvx-Custom-Format / BTHome mit pvvx-Kennung
-	defineObjects(address: string): StateObjectDefinition[];   // Buttons, Statusanzeigen
+	matches(peripheral: PeripheralInfo): boolean;                 // z. B. pvvx-Custom-Format / BTHome mit pvvx-Kennung
+	defineObjects(address: string): StateObjectDefinition[];      // Buttons, Statusanzeigen
 	onStateChange?(address: string, stateId: string, val: unknown, ctx: DriverContext): Promise<void>;
-	onSchedule?(ctx: DriverContext): Promise<void>;            // periodisch / Ereignisse
+	onSchedule?(ctx: DriverContext): Promise<void>;               // periodisch / Ereignisse
 }
 ```
-
-Ein UUID-Mapping wird zentral normalisiert: kurze 16-Bit-UUIDs (`1f10`) werden in beide Richtungen in die volle 128-Bit-Form umgerechnet. ESPHome arbeitet mit Handles, der Session-Layer löst UUIDs über `services()` in Handles auf.
 
 ---
 
 ## 4. API für andere Adapter (`sendTo`)
+
+Das Folgende ist das **Zielbild für Phase 5** und noch nicht verbindlich. Umgesetzt sind `getGateways` und `getDevices`. Phase 2 bringt drei Einzelbefehle ohne Session (`discoverServices`, `readCharacteristic`, `writeCharacteristic`), siehe Spezifikation B8.
 
 Request/Response über `sendToAsync("ble.0", command, payload)`:
 
@@ -229,27 +216,15 @@ Mehr muss ein passives Gateway nicht können.
 
 ### Stufe 2: aktive Verbindungen (optional)
 
-Ein Gateway, das GATT-Verbindungen aufbauen kann, meldet das zusätzlich an.
+Ein Gateway, das GATT-Verbindungen aufbauen kann, meldet das mit `gateway:announce` an. `ble` schickt dann `gatt:*`-Befehle an die Instanz, die das Gateway gemeldet hat. Verbindungsenden und Notifications meldet der Lieferant mit `gateway:connectionState` und `gateway:notification`.
 
-Befehle an `ble.0`:
+**Die Befehle, Payloads, Fehlercodes und Timeouts stehen verbindlich in `docs/spec-phase-2-gatt.md`, Teil A.** Gegenüber früheren Fassungen dieses Plans gilt dort:
 
-| Befehl | Payload → Antwort |
-|---|---|
-| `gateway:announce` | `{ protocol: "ble-gateway/1", gateways: [{ gatewayId, name, connect: true, freeSlots, slotLimit }] }` → `{ protocol, epoch }`. Gesendet beim Start, bei jeder Änderung der Slots und alle 30 s. |
-| `gateway:connectionState` | `{ gatewayId, address, connected, mtu?, error? }`. Auch ungeplante Disconnects werden gemeldet. |
-| `gateway:notification` | `{ gatewayId, address, handle, data: base64 }` |
-
-Befehle von `ble` an den Absender der Meldung:
-
-| Befehl | Payload → Ergebnis |
-|---|---|
-| `gatt:connect` | `{ gatewayId, address, addressType, useCache }` → `{ mtu }` |
-| `gatt:disconnect` | `{ gatewayId, address }` |
-| `gatt:getServices` | `{ gatewayId, address }` → `[{ uuid, handle, characteristics: [{ uuid, handle, properties, descriptors }] }]` |
-| `gatt:read` / `gatt:readDescriptor` | `{ gatewayId, address, handle }` → `{ data: base64 }` |
-| `gatt:write` / `gatt:writeDescriptor` | `{ gatewayId, address, handle, data: base64, withResponse }` |
-| `gatt:writeSequence` | `{ gatewayId, address, handle, chunks: base64[], withResponse, delayMs? }` → `{ written }`. Maximal ca. 256 Chunks pro Aufruf. Gedacht für OTA, siehe E5. |
-| `gatt:setNotify` | `{ gatewayId, address, handle, enable }` |
+- `gatt:subscribe` statt `gatt:setNotify`. Ausschalten gibt es nicht, das Abo endet mit der Verbindung. Um den CCCD-Descriptor kümmert sich der Lieferant.
+- Keine eigenen Befehle für Descriptors.
+- `gatt:writeSequence` kommt erst mit Phase 4.
+- `gateway:connectionState` meldet nur unverlangte Verbindungsenden. Das Ergebnis eines Verbindungsaufbaus ist die Antwort auf `gatt:connect`.
+- `gatt:connect` trägt den `epoch` von `ble`, damit der Lieferant einen Neustart von `ble` erkennt.
 
 ### Regeln
 
@@ -257,7 +232,7 @@ Befehle von `ble` an den Absender der Meldung:
 - **Der liefernde Adapter interpretiert keine Bluetooth-Inhalte.** Es gibt dort kein Parsing von AD-Daten, keine UUID-Logik und keine Gateway-Auswahl. Ausnahme ist die Liste der Services mit Handles, weil sie 1:1 aus der API kommt.
 - **Aufräumen ohne Lease (nur Stufe 2).** Erst für aktive Verbindungen muss der Absender wissen, ob `ble` läuft. Geht `system.adapter.ble.0.alive` auf false, trennt der liefernde Adapter alle GATT-Verbindungen, die er für `ble` geöffnet hat. Die Antwort auf `gateway:announce` enthält außerdem den Startzeitpunkt von `ble` (`epoch`). Ändert er sich, wurde `ble` neu gestartet, und der Absender trennt die alten Verbindungen ebenfalls.
 - **Versionsprüfung.** Bei unbekannter Major-Version antwortet `ble` auf `gateway:announce` mit `UNSUPPORTED_PROTOCOL`. Der Absender schreibt dann eine Warnung ins Log und bietet keine aktiven Verbindungen an.
-- **Fehler** haben die Form `{ error: { code, message } }`. Die Codes sind `NOT_CONNECTED`, `NO_FREE_SLOT`, `TIMEOUT`, `GATT_ERROR`, `UNKNOWN_GATEWAY`, `UNSUPPORTED_PROTOCOL`.
+- **Fehler** haben die Form `{ error: { code, message } }`. Die Codes stehen in der Spezifikation von Phase 2, Abschnitt A3.
 - **Mehrere `ble`-Instanzen.** Der Absender liefert an genau eine Instanz. Welche das ist, steht in seiner Konfiguration.
 - **Größenordnung:** 3 Proxies × 60 Geräte × ca. 1 Advertisement/s ergeben ca. 180 Advertisements/s. Gebündelt sind das nur ca. 4–12 `sendTo`/s, das ist für die States-DB unkritisch. GATT-Einzeloperationen kosten zwei Wege durch die DB (einige ms). Für Zeitsync ist das irrelevant, OTA läuft über `gatt:writeSequence`.
 
@@ -336,14 +311,14 @@ Dazu kommt instanzweit `firmware.updateAll`.
 
 Jede Phase ist für sich releasefähig.
 
-**Stand der Umsetzung:** Phase 0, 1a und 1b sind umgesetzt, siehe die Abschnitte „Umgesetzt“ am Ende dieses Kapitels.
+**Stand der Umsetzung:** siehe die Tabelle am Anfang dieses Dokuments. Was in Phase 0 bis 1b gebaut wurde, steht in den Abschnitten „Umgesetzt“ am Ende dieses Kapitels.
 
 | Phase | Inhalt | Ergebnis / Abnahme | Größe |
 |---|---|---|---|
 | **0: Refactoring ohne Verhaltensänderung** | Aus `main.ts` werden `scanner/` (Dedupe, Drosselung, Plugin-Dispatch) und `transports/noble-local`, `noble-remote` extrahiert. `PeripheralInfo` wird ein eigener Typ. Dazu Unit-Tests für den Dispatch mit einem Fake-Transport. | Bestehende Tests sind grün, und identische Objekte und States entstehen im manuellen Test mit einem echten Dongle. | M |
 | **1a: Gateway-Schnittstelle in `ble` (Empfang)** | `gateway-protocol.ts`, Befehl `gateway:advertisements`, Transport `remote-gateway`, AD-Parser (mit Unit-Tests gegen echte Pakete), Registry mit Gateway pro Gerät, Dedupe, Offline-Erkennung. Dazu der Hub-Betrieb ohne lokalen Stick (E8). | Ein Testskript schickt aufgezeichnete Pakete per `sendTo` an `ble.0`. Die Sensoren landen mit korrekter MAC in den bestehenden Objekten, ohne doppelte Dekodierung. Das funktioniert auch auf einem Host ohne Bluetooth-Hardware und ohne `noble`. | L |
 | **1b: `esphome` liefert Pakete** (PR in `ioBroker.esphome`) | Spike in `@2colors/esphome-native-api` (E7), Advertisement-Abo am ESP, sobald die Weiterleitung konfiguriert ist, Bündelung, Konfigurationsoption. | pvvx-/BTHome-Sensoren aus drei Stockwerken erscheinen in `ble`. Ohne konfigurierte Weiterleitung verhält sich `esphome` wie bisher. | S–M |
-| **2: GATT-Kern** | `ble`: `gateway:announce`, `connections/` mit Session, Queue, Leases, Slots, Timeouts, Retry über ein anderes Gateway, plus Debug-Befehle über `sendTo` für den PoC. `esphome`: `gateway:announce`, die `gatt:*`-Befehle, Meldung von `connectionState` und `notification`, Aufräumen, wenn `ble` stoppt. | Ein Characteristic eines Thermometers wird über einen entfernten Proxy gelesen und geschrieben, und das Verhalten bei parallelen Anfragen ist getestet. Stirbt `ble`, baut `esphome` die Verbindungen ab. | L |
+| **2: GATT-Kern** | Spezifikation: `docs/spec-phase-2-gatt.md`. `ble`: `gateway:announce`, `connections/` mit Link, Session und Connection Manager (ein Auftrag pro Gerät, Gateway-Auswahl, Timeouts, nächstes Gateway bei Fehler), drei Einzelbefehle über `sendTo`. `esphome`: `gateway:announce` mit freien Plätzen, die `gatt:*`-Befehle, Meldung von Verbindungsenden und Notifications, Aufräumen, wenn `ble` stoppt oder neu startet. | Eine Characteristic eines Thermometers wird über einen entfernten Proxy gelesen und geschrieben. Zwei Anfragen an dasselbe Gerät laufen nacheinander. Stirbt `ble`, baut `esphome` die Verbindungen ab. | L |
 | **3: pvvx-Zeitsync** | `drivers/pvvx` mit Zeit lesen und setzen, Drift, Auslösern und DST-Erkennung. | Eine simulierte DST-Umstellung (Offset gemockt) synchronisiert alle Geräte gestaffelt, und `time.drift` ist danach ≈ 0. | M |
 | **4: pvvx-OTA** | `esphome`: `gatt:writeSequence`. `ble`: Firmware-Verwaltung, Vorab-Prüfungen, serieller Rollout, Fortschritt. | Ein Testgerät wird über einen Proxy erfolgreich geflasht, und ein absichtlicher Abbruch lässt das Gerät funktionsfähig. | L |
 | **5: Externe API** | Vollständige `sendTo`-API (Abschnitt 4) mit Leases, Advertisement-Abos und Doku. | Ein Beispieladapter oder -skript liest per API ein Characteristic und erhält Notifications. | M |
@@ -437,7 +412,8 @@ Noch nicht getestet ist der Weg mit einem echten ESP32 und mit beiden Adaptern i
 
 ## 9. Nächste konkrete Schritte
 
-1. Die Weiterleitung mit einem echten ESP32-Proxy und beiden Adaptern in einer Installation ausprobieren.
+1. Die Weiterleitung (Phase 1b) mit einem echten ESP32-Proxy und beiden Adaptern in einer Installation ausprobieren.
 2. Den Branch in `ioBroker.esphome` als PR gegen `v2` stellen und mit den Maintainern abstimmen.
-3. Phase 2 (GATT-Kern) beginnen: `gateway:announce` und die `gatt:*`-Befehle in `gateway-protocol.ts` festlegen, dann `connections/` in `ble` und die Gegenstücke in `esphome`.
-4. Das pvvx-Protokoll für `0x23` und Telink-OTA aus dem Flasher-Quellcode extrahieren und als Spezifikation in `docs/pvvx-protocol.md` festhalten.
+3. Phase 2 nach `docs/spec-phase-2-gatt.md` umsetzen.
+4. Das pvvx-Protokoll aus dem Quellcode von Flasher und Firmware herausziehen und als `docs/pvvx-protocol.md` festhalten: Byte-Layout von `0x23` (Zeit), Bedeutung der Zeit (lokal oder UTC), Telink-OTA (UUIDs, Paketformat, Prüfsumme, Ablauf), dazu Testvektoren. Ohne dieses Dokument werden Phase 3 und 4 nicht begonnen.
+5. Danach die Spezifikationen für Phase 3 und 4 schreiben.
