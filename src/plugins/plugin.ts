@@ -38,6 +38,8 @@ export interface Plugin<TContext = any> {
 	description: string;
 	/** A list of services to include in the scan */
 	advertisedServices: string[];
+	/** Bluetooth company identifiers to include even without advertised services */
+	manufacturerIds?: number[];
 
 	/** Determines whether this plugin is handling a peripheral or not */
 	isHandling: (peripheral: PeripheralInfo) => boolean;
@@ -53,7 +55,7 @@ export function getServiceData(
 	peripheral: PeripheralInfo,
 	uuid: string,
 ): Buffer | undefined {
-	for (const entry of peripheral.advertisement!.serviceData!) {
+	for (const entry of peripheral.advertisement?.serviceData ?? []) {
 		if (entry.uuid === uuid) return entry.data;
 	}
 }

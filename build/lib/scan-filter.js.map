@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../src/lib/scan-filter.ts"],
+  "sourcesContent": ["import type { PeripheralInfo } from \"./scanProcessInterface\";\n\n/** Match services or manufacturer data while preserving an unfiltered scan. */\nexport function matchesScanFilter(\n\tperipheral: PeripheralInfo,\n\tservices: readonly string[],\n\tmanufacturerIds: readonly number[],\n): boolean {\n\tif (services.length === 0) return true;\n\n\tconst advertisement = peripheral.advertisement;\n\tif (!advertisement) return false;\n\tif (\n\t\tadvertisement.serviceUuids?.some((uuid) => services.includes(uuid)) ||\n\t\tadvertisement.serviceData?.some(({ uuid }) => services.includes(uuid))\n\t) {\n\t\treturn true;\n\t}\n\n\tconst data = advertisement.manufacturerData;\n\treturn (\n\t\tdata != null &&\n\t\tdata.length >= 2 &&\n\t\tmanufacturerIds.includes(data.readUInt16LE(0))\n\t);\n}\n"],
+  "mappings": ";;;;;;;;;;;;;;;;;;AAAA;AAAA;AAAA;AAAA;AAAA;AAGO,SAAS,kBACf,YACA,UACA,iBACU;AAPX;AAQC,MAAI,SAAS,WAAW;AAAG,WAAO;AAElC,QAAM,gBAAgB,WAAW;AACjC,MAAI,CAAC;AAAe,WAAO;AAC3B,QACC,mBAAc,iBAAd,mBAA4B,KAAK,CAAC,SAAS,SAAS,SAAS,IAAI,SACjE,mBAAc,gBAAd,mBAA2B,KAAK,CAAC,EAAE,KAAK,MAAM,SAAS,SAAS,IAAI,KACnE;AACD,WAAO;AAAA,EACR;AAEA,QAAM,OAAO,cAAc;AAC3B,SACC,QAAQ,QACR,KAAK,UAAU,KACf,gBAAgB,SAAS,KAAK,aAAa,CAAC,CAAC;AAE/C;",
+  "names": []
+}

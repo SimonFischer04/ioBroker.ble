@@ -1,6 +1,7 @@
 "use strict";
 var import_net = require("net");
 var import_misc = require("./lib/misc");
+var import_scan_filter = require("./lib/scan-filter");
 var import_scanProcessInterface = require("./lib/scanProcessInterface");
 const yargs = require("yargs");
 const argv = yargs.env("IOB_BLE").strict().usage("ioBroker.ble scanner process\n\nUsage: $0 [options]").options({
@@ -15,6 +16,12 @@ const argv = yargs.env("IOB_BLE").strict().usage("ioBroker.ble scanner process\n
     type: "string",
     array: true,
     desc: "Which BLE services to scan for",
+    default: []
+  },
+  manufacturerIds: {
+    type: "number",
+    array: true,
+    desc: "Bluetooth company identifiers to scan for in addition to services",
     default: []
   },
   listenInterface: {
@@ -108,6 +115,9 @@ function serializePeripheral(peripheral) {
 function onDiscover(peripheral) {
   if (peripheral == void 0)
     return;
+  if (!(0, import_scan_filter.matchesScanFilter)(peripheral, argv.services, argv.manufacturerIds)) {
+    return;
+  }
   sendAsync({
     type: "discover",
     peripheral: serializePeripheral(peripheral)
@@ -123,7 +133,10 @@ async function startScanning() {
     message: `starting scan for services ${JSON.stringify(argv.services)}`
   });
   noble.on("discover", onDiscover);
-  await noble.startScanningAsync(argv.services, true);
+  await noble.startScanningAsync(
+    argv.manufacturerIds.length > 0 ? [] : argv.services,
+    true
+  );
   isScanning = true;
 }
 async function stopScanning() {

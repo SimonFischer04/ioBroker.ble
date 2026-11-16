@@ -23,7 +23,8 @@ __export(plugin_exports, {
 });
 module.exports = __toCommonJS(plugin_exports);
 function getServiceData(peripheral, uuid) {
-  for (const entry of peripheral.advertisement.serviceData) {
+  var _a, _b;
+  for (const entry of (_b = (_a = peripheral.advertisement) == null ? void 0 : _a.serviceData) != null ? _b : []) {
     if (entry.uuid === uuid)
       return entry.data;
   }

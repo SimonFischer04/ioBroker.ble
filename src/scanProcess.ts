@@ -2,6 +2,7 @@
 import type { Peripheral } from "@stoprocent/noble";
 import { createServer, type AddressInfo, type Server, type Socket } from "net";
 import { pick } from "./lib/misc";
+import { matchesScanFilter } from "./lib/scan-filter";
 import {
 	ScanExitCodes,
 	type InboundMessage,
@@ -27,6 +28,12 @@ const argv = yargs
 			type: "string",
 			array: true,
 			desc: "Which BLE services to scan for",
+			default: [],
+		},
+		manufacturerIds: {
+			type: "number",
+			array: true,
+			desc: "Bluetooth company identifiers to scan for in addition to services",
 			default: [],
 		},
 		listenInterface: {
@@ -135,6 +142,9 @@ function serializePeripheral(peripheral: Peripheral): PeripheralInfo {
 
 function onDiscover(peripheral?: Peripheral) {
 	if (peripheral == undefined) return;
+	if (!matchesScanFilter(peripheral, argv.services, argv.manufacturerIds)) {
+		return;
+	}
 	sendAsync({
 		type: "discover",
 		peripheral: serializePeripheral(peripheral),
@@ -151,7 +161,12 @@ async function startScanning() {
 	});
 	// We must allow duplicates in order to support
 	noble.on("discover", onDiscover);
-	await noble.startScanningAsync(argv.services, true);
+	// Noble's service filter drops manufacturer-only advertisements. Apply the
+	// combined filter in onDiscover when a plugin needs manufacturer data.
+	await noble.startScanningAsync(
+		argv.manufacturerIds.length > 0 ? [] : argv.services,
+		true,
+	);
 	isScanning = true;
 }
 
