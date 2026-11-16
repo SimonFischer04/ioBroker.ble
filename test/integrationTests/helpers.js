@@ -50,8 +50,147 @@ async function waitFor(check, description, timeoutMs = 15000) {
 }
 
 /**
- * Sends a message to the adapter and resolves with its answer.
- * The harness matches answers by order, so messages must be sent one after the other.
+ * Talks to the adapter like another adapter instance (SENDER) does, in both directions:
+ *
+ * - request(): sends a message and resolves with the answer of the adapter
+ * - onRequest(): answers the messages the adapter sends to this instance, e.g. the "gatt:*"
+ *   commands it sends to an instance that announced a gateway
+ *
+ * The sendTo() of the harness cannot be used for this: it takes the next message arriving in
+ * the messagebox as the answer, even if it is a request of the adapter.
+ *
+ * A request carries `callback: { message, id, ack: false, time }`. The answer is the same
+ * message sent back to `from` with `callback.ack: true`, which is what
+ * adapter.sendTo(obj.from, obj.command, response, obj.callback) does.
+ */
+class MessageClient {
+	/**
+	 * @param {any} harness - Integration test harness
+	 */
+	constructor(harness) {
+		this.harness = harness;
+		this.from = `system.adapter.${SENDER}`;
+		this.nextId = 1;
+		/** @type {Map<number, (response: any) => void>} */
+		this.pending = new Map();
+		/** @type {((command: string, message: any) => any) | null} */
+		this.requestHandler = null;
+		/**
+		 * Everything the adapter sent to this instance, answered or not
+		 *
+		 * @type {{command: string, message: any}[]}
+		 */
+		this.received = [];
+
+		harness.on(
+			"stateChange",
+			(/** @type {string} */ id, /** @type {any} */ msg) => {
+				if (id !== `messagebox.${this.from}` || !msg) {
+					return;
+				}
+				if (msg.callback && msg.callback.ack) {
+					// The answer to one of our requests
+					const resolve = this.pending.get(msg.callback.id);
+					if (resolve) {
+						this.pending.delete(msg.callback.id);
+						resolve(msg.message);
+					}
+					return;
+				}
+				this.received.push({
+					command: msg.command,
+					message: msg.message,
+				});
+				if (msg.callback && this.requestHandler) {
+					Promise.resolve(
+						this.requestHandler(msg.command, msg.message),
+					).then((response) => {
+						// undefined = leave the request unanswered
+						if (response !== undefined) {
+							this.push(msg.from, {
+								command: msg.command,
+								message: response,
+								from: this.from,
+								callback: { ...msg.callback, ack: true },
+							});
+						}
+					});
+				}
+			},
+		);
+	}
+
+	/**
+	 * @param {string} target - Messagebox to send to, e.g. "system.adapter.ble.0"
+	 * @param {any} obj - The message
+	 */
+	push(target, obj) {
+		this.harness.dbConnection.pushMessage(target, obj, () => {});
+	}
+
+	/**
+	 * Sends a message to the adapter and resolves with its answer
+	 *
+	 * @param {string} command - Message command
+	 * @param {any} message - Message payload
+	 * @param {number} [timeoutMs] - How long to wait for the answer
+	 * @returns {Promise<any>} The answer of the adapter
+	 */
+	request(command, message, timeoutMs = 15000) {
+		const id = this.nextId++;
+		return new Promise((resolve, reject) => {
+			const timer = setTimeout(() => {
+				this.pending.delete(id);
+				reject(
+					new Error(
+						`No answer to "${command}" within ${timeoutMs}ms`,
+					),
+				);
+			}, timeoutMs);
+			this.pending.set(id, (response) => {
+				clearTimeout(timer);
+				resolve(response);
+			});
+			this.push(`system.adapter.${NAMESPACE}`, {
+				command,
+				message,
+				from: this.from,
+				callback: { message, id, ack: false, time: Date.now() },
+			});
+		});
+	}
+
+	/**
+	 * Sets the function that answers the requests of the adapter
+	 *
+	 * @param {((command: string, message: any) => any) | null} handler - Returns the answer (or a
+	 *     promise for it), undefined to leave a request unanswered
+	 */
+	onRequest(handler) {
+		this.requestHandler = handler;
+	}
+}
+
+/** @type {WeakMap<object, MessageClient>} */
+const messageClients = new WeakMap();
+
+/**
+ * The message client of a harness. Every suite gets a new harness and with it a new client.
+ *
+ * @param {any} harness - Integration test harness
+ * @returns {MessageClient}
+ */
+function getMessageClient(harness) {
+	let client = messageClients.get(harness);
+	if (!client) {
+		client = new MessageClient(harness);
+		messageClients.set(harness, client);
+	}
+	return client;
+}
+
+/**
+ * Sends a message to the adapter and resolves with its answer
  *
  * @param {any} harness - Integration test harness
  * @param {string} command - Message command
@@ -60,21 +199,7 @@ async function waitFor(check, description, timeoutMs = 15000) {
  * @returns {Promise<any>} The answer of the adapter
  */
 function sendToAdapter(harness, command, message, timeoutMs = 15000) {
-	return new Promise((resolve, reject) => {
-		const timer = setTimeout(
-			() =>
-				reject(
-					new Error(
-						`No answer to "${command}" within ${timeoutMs}ms`,
-					),
-				),
-			timeoutMs,
-		);
-		harness.sendTo(NAMESPACE, command, message, (response) => {
-			clearTimeout(timer);
-			resolve(response);
-		});
-	});
+	return getMessageClient(harness).request(command, message, timeoutMs);
 }
 
 /**
@@ -254,6 +379,7 @@ module.exports = {
 	buildAdvertisement,
 	delay,
 	deliver,
+	getMessageClient,
 	getValue,
 	sendToAdapter,
 	startAdapter,
