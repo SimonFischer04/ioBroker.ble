@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../src/transports/transport.ts"],
+  "sourcesContent": ["import type { GatewayRegistry } from \"../gateways/gateway-registry\";\nimport type { PeripheralInfo } from \"../lib/advertisement\";\n\n/** What a transport needs from the adapter */\nexport interface TransportContext {\n\tadapter: ioBroker.Adapter;\n\t/** Where the transport reports its gateways and whether they are active */\n\tgateways: GatewayRegistry;\n\t/** Called for every received advertisement. `gatewayId` must be set. */\n\tonAdvertisement: (peripheral: PeripheralInfo) => void;\n}\n\n/** A source of BLE advertisements */\nexport interface Transport {\n\tstart(): void;\n\tstop(): void;\n}\n"],
+  "mappings": ";;;;;;;;;;;;;;AAAA;AAAA;",
+  "names": []
+}

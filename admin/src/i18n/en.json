@@ -11,5 +11,7 @@
 	"Service characteristics as HEX codes or UUID, comma separated.": "Service characteristics as HEX codes or UUID, comma separated.",
 	"Settings": "Settings",
 	"Too frequent updates can slow down the admin.": "Too frequent updates can slow down the admin.",
-	"This will be automatically disabled after 5 minutes.": "This will be automatically disabled after 5 minutes."
+	"This will be automatically disabled after 5 minutes.": "This will be automatically disabled after 5 minutes.",
+	"Use the Bluetooth adapter of this host": "Use the Bluetooth adapter of this host",
+	"When disabled, only advertisements delivered by other adapters are handled. No Bluetooth hardware is needed then.": "When disabled, only advertisements delivered by other adapters are handled. No Bluetooth hardware is needed then."
 }

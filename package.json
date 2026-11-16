@@ -36,10 +36,12 @@
   },
   "dependencies": {
     "@iobroker/adapter-core": "^3.0.4",
-    "@stoprocent/noble": "^1.18.2",
     "alcalzone-shared": "^4.0.8",
     "iobroker-react-components": "^1.0.0",
     "yargs": "^17.7.2"
+  },
+  "optionalDependencies": {
+    "@stoprocent/noble": "^1.18.2"
   },
   "devDependencies": {
     "@alcalzone/release-script": "~3.7.0",

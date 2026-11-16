@@ -23,6 +23,48 @@ which requires `libcap2-bin` to be installed.
 If you have multiple bluetooth devices on your system, select the one to use from the dropdown.
 In the textbox below, enter all UUIDs of the advertised services you want to record (as found in the nRF Connect app).
 
+### Running without Bluetooth hardware
+The Bluetooth adapter of the host is optional. Disable **Use the Bluetooth adapter of this host** in the settings to run the adapter as a hub that only handles the advertisements other adapters deliver (see below). In this mode the Bluetooth driver is not loaded, so neither Bluetooth hardware, nor the `setcap` command above, nor host mode networking in Docker are needed.
+
+If the option is enabled but the Bluetooth adapter cannot be used (no hardware, missing permissions, driver not installed), the adapter logs an error and keeps running, so it can still receive advertisements from other adapters.
+
+## Receiving advertisements from other adapters
+Other adapters can deliver the BLE advertisements they receive, e.g. from ESPHome Bluetooth proxies distributed in the house. They are handled exactly like the ones received by the local Bluetooth adapter: the same plugins, the same objects and states. The device ID is the MAC address in lowercase, no matter which receiver delivered the advertisement.
+
+```js
+const response = await adapter.sendToAsync("ble.0", "gateway:advertisements", {
+	// Identifies the receiver within the sending instance
+	gatewayId: "proxy-og",
+	items: [
+		{
+			address: "a4:c1:38:12:34:56",
+			rssi: -67,
+			// The raw payload of the advertisement (the AD structures), base64 encoded
+			data: "AgEGDhbS/EAApQFkAsQJA78T",
+			// optional: addressType ("public" | "random"), connectable
+		},
+	],
+});
+// => { error: null, result: { accepted: 1, rejected: 0 } }
+// or { error: { code: "INVALID_PAYLOAD", message: "..." } }
+```
+
+* There is no registration. A gateway is created with the first message, its ID is `<sender>:<gatewayId>`, e.g. `esphome.0:proxy-og`.
+* Deliver the advertisements in batches (at most 500 per message), a few times per second at most.
+* A gateway is offline when it delivered nothing for 60 seconds, or when the delivering instance is stopped. An empty batch is enough to keep it online.
+* When several gateways receive the same packet, it is decoded once. The `rssi` state of a device is the signal strength measured by the gateway that receives it best.
+* The monitored services from the settings also apply to delivered advertisements, and new devices are only recorded while **Accept new devices** is enabled.
+
+The types of the interface are defined in [`src/lib/gateway-protocol.ts`](src/lib/gateway-protocol.ts). The file has no dependencies and can be copied.
+
+| Command | Result |
+|---|---|
+| `gateway:advertisements` | Delivers advertisements, see above |
+| `getGateways` | All sources of advertisements: `[{ id, type, sender, connected, lastAdvertisement, advertisements, duplicates }]` |
+| `getDevices` | The devices received in the last 10 minutes: `[{ address, name, gateways: [{ id, rssi, lastSeen }] }]`, strongest gateway first |
+
+For every gateway the states `gateways.<id>.connected` and `gateways.<id>.lastAdvertisement` are created. `info.connection` is `true` while at least one source of advertisements is active.
+
 ## Plugin system
 The adapter supports extension via plugins. Those define which advertised services should be listened to and how to translate the data. The plugin structure is defined in https://github.com/AlCalzone/ioBroker.ble/blob/master/src/plugins/plugin.ts and an example of a working plugin is defined here https://github.com/AlCalzone/ioBroker.ble/blob/master/src/plugins/_default.ts
 
@@ -42,6 +84,12 @@ If you have any device transmitting specially encoded information via advertisem
 	Placeholder for next release:
 	### __WORK IN PROGRESS__
 -->
+### __WORK IN PROGRESS__
+* Other adapters can deliver BLE advertisements they received, e.g. from ESPHome Bluetooth proxies (`gateway:advertisements`). Several receivers can be used at the same time.
+* The adapter can run without Bluetooth hardware: the Bluetooth adapter of the host can be disabled in the settings, and the Bluetooth driver is an optional dependency now
+* A problem with the Bluetooth adapter of the host no longer terminates the adapter
+* The connection to a remote scan server is re-established when it was lost
+
 ### 0.14.1 (2025-02-09)
 * Fixed compatibility issues with newer OS and Node.js versions (#874)
 

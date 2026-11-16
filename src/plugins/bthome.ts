@@ -41,7 +41,7 @@ const plugin: Plugin<BTHomeContext> = {
 
 	advertisedServices: ["fcd2"],
 	isHandling: (p) => {
-		return p.advertisement?.serviceData?.some(
+		return !!p.advertisement?.serviceData?.some(
 			(entry) => entry.uuid === "fcd2",
 		);
 	},

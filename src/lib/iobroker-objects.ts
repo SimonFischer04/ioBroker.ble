@@ -4,7 +4,7 @@ import type {
 	StateObjectDefinition,
 } from "../plugins/plugin";
 import { Global as _ } from "./global";
-import type { PeripheralInfo } from "./scanProcessInterface";
+import type { PeripheralInfo } from "./advertisement";
 
 /** Extends a device object in the ioBroker objects DB */
 export async function extendDevice(
@@ -19,7 +19,8 @@ export async function extendDevice(
 	const updated: ioBroker.SettableObject = {
 		type: "device",
 		common: {
-			name: peripheral.advertisement.localName,
+			// Not every device advertises a name
+			name: peripheral.advertisement.localName as string,
 			...object.common,
 			...(original && original.common),
 		},

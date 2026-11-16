@@ -1,5 +1,8 @@
-import type { Peripheral } from "@stoprocent/noble";
 import { isArray, isObject } from "alcalzone-shared/typeguards";
+import type { PeripheralInfo } from "./advertisement";
+
+// The decoder plugins import the type from here
+export type { PeripheralInfo } from "./advertisement";
 
 export enum ScanExitCodes {
 	RequireNobleFailed = 1,
@@ -41,19 +44,6 @@ export type ScanMessage =
 			type: "discover";
 			peripheral: PeripheralInfo;
 	  };
-
-export type PeripheralInfo = Pick<
-	Peripheral,
-	| "id"
-	| "uuid"
-	| "address"
-	| "addressType"
-	| "connectable"
-	| "advertisement"
-	| "rssi"
-	| "services"
-	| "state"
->;
 
 export function getMessageReviver<T extends Record<string, any>>(
 	callback: (message: T) => void,

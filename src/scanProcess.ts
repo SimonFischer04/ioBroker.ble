@@ -128,9 +128,7 @@ function serializePeripheral(peripheral: Peripheral): PeripheralInfo {
 		"connectable",
 		"advertisement",
 		"rssi",
-		"services",
-		"state",
-	]);
+	]) as PeripheralInfo;
 }
 
 function onDiscover(peripheral?: Peripheral) {
