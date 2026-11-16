@@ -1,6 +1,6 @@
 # Plan: zentrale Bluetooth-Infrastruktur in `ioBroker.ble`
 
-Status: Phase 0 und 1a umgesetzt · Stand 2026-11-11
+Status: Phase 0, 1a und 1b umgesetzt · Stand 2026-11-16
 
 Ziel: `ioBroker.ble` wird die zentrale BLE-Schicht für ioBroker. Er stellt mehrere Empfänger (ESPHome-Bluetooth-Proxies, lokaler Dongle) bereit, macht aktive GATT-Verbindungen möglich und bietet anderen Adaptern eine API. Der konkrete Anlass sind pvvx-Thermometer ([ATC_MiThermometer](https://github.com/pvvx/ATC_MiThermometer)), deren Uhrzeit automatisch synchronisiert werden soll (inklusive Sommer-/Winterzeit) und auf die Firmware-Updates ausgerollt werden sollen.
 
@@ -96,12 +96,11 @@ Die Abhängigkeit zeigt nur in eine Richtung: Der `esphome`-Adapter kennt `ble`,
 - **Der Rückweg bleibt generisch.** Für aktive Verbindungen schickt `ble` GATT-Befehle an den Adapter, der das Gateway gemeldet hat. Den Instanznamen kennt `ble` aus der Meldung selbst.
 - **Aufteilung der Zuständigkeiten:** Der liefernde Adapter reicht nur durch und weiß nichts über Decoder, Gateway-Auswahl oder Queues. Diese Logik liegt komplett in `ble`.
 
-Im Spike zu Phase 1b ist in `@2colors/esphome-native-api` zu prüfen:
-1. Gibt es Raw-Advertisements, also gebündelte AD-Bytes, oder nur geparste einzelne `ble`-Events? Bei vielen Geräten ist das für die Performance wichtig.
-2. Mit welchem Event kommen Notify-Daten an?
-3. Werden die Meldungen zu freien Verbindungsslots und zum Verbindungsstatus (MTU, Disconnect-Grund) bereitgestellt?
-
-Fehlt etwas, wird es per Upstream-PR in der Bibliothek ergänzt.
+Ergebnis der Prüfung von `@2colors/esphome-native-api` 1.3.6 (Phase 1b):
+1. **Raw-Advertisements gibt es, gebündelt.** Die Bibliothek abonniert sie automatisch, wenn die Firmware sie kann (API ≥ 1.9, ESPHome ≥ 2023.6.0). In ihren eigenen Events (`ble`, `message.BluetoothLERawAdvertisementsResponse`) ist die Payload aber schon geparst und entfernt. `esphome` liest die Nachricht deshalb direkt vom `frameHelper` der Verbindung, dort kommt sie unverändert an.
+2. **Notify-Daten** kommen als `message.BluetoothGATTNotifyDataResponse` auf der Verbindung an. Eine eigene Methode dafür gibt es nicht, sie ist für Phase 2 auch nicht nötig.
+3. **Freie Verbindungsslots:** Die Nachrichtentypen sind bekannt (`SubscribeBluetoothConnectionsFreeRequest`, `BluetoothConnectionsFreeResponse` mit `free` und `limit`), eine Methode zum Abonnieren fehlt. Für Phase 2 muss `esphome` die Anfrage selbst über `connection.sendMessage()` schicken oder die Bibliothek bekommt einen PR.
+4. **MTU und Fehler** stehen in `BluetoothDeviceConnectionResponse` (`connected`, `mtu`, `error`), das `connectBluetoothDeviceService()` zurückgibt.
 
 **E8: `ble` läuft auch als reiner Hub, ohne Bluetooth-Stick.**
 Der Hauptprozess lädt schon heute keinen nativen Code. `noble` wird nur im Kindprozess `scanProcess` geladen. Die Kopplung an lokale Hardware besteht aus vier Stellen:
@@ -318,8 +317,8 @@ Dazu kommt instanzweit `firmware.updateAll`.
   - pvvx-Driver: `autoTimeSync`, `timeSyncIntervalH`, `minBatteryForOta`
   - Für Gateways gibt es nichts zu konfigurieren. Sie erscheinen von selbst, sobald ein Adapter Pakete liefert.
 - **Konfiguration `esphome`:**
-  - „BLE-Pakete weiterleiten an“ mit Auswahl der `ble`-Instanz. Gibt es genau eine, ist sie vorausgewählt.
-  - Pro Gerät lässt sich die Weiterleitung abschalten.
+  - „BLE-Advertisements weiterleiten an“ mit Auswahl der `ble`-Instanz (`bleForwardInstance`). Ohne Auswahl wird nichts weitergeleitet, das ist der Standard.
+  - Einen Schalter pro Gerät gibt es nicht. Abonniert werden nur Geräte, die sich als Bluetooth-Proxy melden.
 - **Migration:** Bestehende Konfigurationen bleiben gültig. Solange kein Adapter Pakete liefert, verhält sich `ble` exakt wie heute.
 - **Neue Instanz-Objekte in `ble`:**
   - `gateways.<absender>_<gatewayId>.connected`
@@ -337,7 +336,7 @@ Dazu kommt instanzweit `firmware.updateAll`.
 
 Jede Phase ist für sich releasefähig.
 
-**Stand der Umsetzung:** Phase 0 und Phase 1a sind umgesetzt, siehe Abschnitt „Umgesetzt“ am Ende dieses Kapitels.
+**Stand der Umsetzung:** Phase 0, 1a und 1b sind umgesetzt, siehe die Abschnitte „Umgesetzt“ am Ende dieses Kapitels.
 
 | Phase | Inhalt | Ergebnis / Abnahme | Größe |
 |---|---|---|---|
@@ -388,6 +387,19 @@ Integrationstests liegen in `test/integrationTests/`, nach dem Muster des `v2`-B
 
 Noch offen aus E8: Was passiert, wenn die Installation der `osDependencies` fehlschlägt.
 
+### Umgesetzt (Phase 1b, in `ioBroker.esphome`)
+
+Branch `ccr-ble-gateway-forwarding` in `DrozmotiX/ioBroker.esphome`, auf Basis von `v2`.
+
+- **`src/lib/bleForwarder.ts`:** Abonniert die Advertisements an jedem Gerät, das Raw-Advertisements kann (`bluetoothProxyFeatureFlags`, Bit 5), bei jeder neuen Verbindung. Die Pakete werden pro Proxy 250 ms gesammelt und dann als eine Nachricht an `ble` geschickt, höchstens 500 pro Nachricht.
+- **Gateway-ID ist der ESPHome-Name** des Geräts, in `ble` also zum Beispiel `esphome.0:proxy-og`.
+- **Wiederholungen:** Dieselbe Payload desselben BLE-Geräts wird pro Batch einmal geschickt, mit dem zuletzt gemessenen RSSI.
+- **Leerer Batch als Lebenszeichen:** Ein Proxy meldet sich direkt nach dem Abonnieren und danach alle 30 s mit einem leeren Batch, wenn er nichts empfängt. Sonst würde `ble` ihn nach 60 s als offline führen, obwohl er läuft.
+- **Kein Rückkanal:** `esphome` wartet auf keine Antwort und prüft nicht, ob `ble` läuft.
+- **Tests:** Unit-Tests bauen die Nachrichten mit den Protobuf-Klassen der Bibliothek. Die Integrations-Suite `ble_forwarding_tests.js` startet den Adapter gegen einen nachgebauten Proxy (`fakeBluetoothProxy.js`, echtes API-Protokoll auf `127.0.0.1:6053`) und liest die Nachrichten mit, die an `ble.0` gehen. Die Host-Plattform des E2E-Geräts hat kein Bluetooth, deshalb der Nachbau.
+
+Noch nicht getestet ist der Weg mit einem echten ESP32 und mit beiden Adaptern in einer Installation.
+
 ### Teststrategie
 
 - **Unit:**
@@ -425,14 +437,7 @@ Noch offen aus E8: Was passiert, wenn die Installation der `osDependencies` fehl
 
 ## 9. Nächste konkrete Schritte
 
-1. Phase 0 umsetzen: Refactoring `main.ts` → `scanner/` + `transports/noble-*`, eigener `Advertisement`-Typ.
-2. `gateway-protocol.ts` (§4a) als Typdatei in `ble` festlegen, zuerst nur den Teil für den reinen Empfang.
-3. Den Spike in `ioBroker.esphome` durchführen: Über die vorhandene `@2colors/esphome-native-api`-Verbindung gegen einen echten Proxy prüfen, ob Folgendes erreichbar ist:
-   - Raw-Advertisements,
-   - Notify-Events,
-   - freie Slots,
-   - MTU und Disconnect-Gründe.
-
-   Lücken werden als PR an die Bibliothek gemeldet.
-4. Die Weiterleitung mit den Maintainern von `ioBroker.esphome` abstimmen, zum Beispiel per Issue oder Draft-PR.
-5. Das pvvx-Protokoll für `0x23` und Telink-OTA aus dem Flasher-Quellcode extrahieren und als Spezifikation in `docs/pvvx-protocol.md` festhalten.
+1. Die Weiterleitung mit einem echten ESP32-Proxy und beiden Adaptern in einer Installation ausprobieren.
+2. Den Branch in `ioBroker.esphome` als PR gegen `v2` stellen und mit den Maintainern abstimmen.
+3. Phase 2 (GATT-Kern) beginnen: `gateway:announce` und die `gatt:*`-Befehle in `gateway-protocol.ts` festlegen, dann `connections/` in `ble` und die Gegenstücke in `esphome`.
+4. Das pvvx-Protokoll für `0x23` und Telink-OTA aus dem Flasher-Quellcode extrahieren und als Spezifikation in `docs/pvvx-protocol.md` festhalten.
