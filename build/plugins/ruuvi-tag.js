@@ -27,28 +27,17 @@ var import_plugin = require("./plugin");
  */
 const serviceUUID = "feaa";
 const manufacturerId = Buffer.from([153, 4]);
-const testValidity = 1e3 * 3600;
-const testedPeripherals = /* @__PURE__ */ new Map();
 const plugin = {
   name: "ruuvi-tag",
   description: "Ruuvi Tag",
   advertisedServices: [serviceUUID],
+  manufacturerIds: [1177],
   isHandling: (peripheral) => {
-    const cached = testedPeripherals.get(peripheral.id);
-    if (cached && cached.timestamp >= Date.now() - testValidity) {
-      return cached.result;
-    }
-    let ret = false;
     try {
-      const ctx = plugin.createContext(peripheral);
-      ret = ctx != null;
+      return plugin.createContext(peripheral) != null;
     } catch (e) {
+      return false;
     }
-    testedPeripherals.set(peripheral.id, {
-      timestamp: Date.now(),
-      result: ret
-    });
-    return ret;
   },
   createContext: (peripheral) => {
     if (!peripheral.advertisement)

@@ -146,6 +146,30 @@ describe("xiaomi protocol => ", () => {
 			});
 		});
 
+		it("Mi-Flora: ignores invalid moisture percentages", () => {
+			for (const moisture of [101, 160, 255]) {
+				const frame = Buffer.from(
+					"71209800d8795d658d7cc40d08100100",
+					"hex",
+				);
+				frame[frame.length - 1] = moisture;
+				expect(new XiaomiAdvertisement(frame).event).to.deep.equal({});
+			}
+		});
+
+		it("Mi-Flora: keeps valid moisture percentages including the boundaries", () => {
+			for (const moisture of [0, 13, 100]) {
+				const frame = Buffer.from(
+					"71209800d8795d658d7cc40d08100100",
+					"hex",
+				);
+				frame[frame.length - 1] = moisture;
+				expect(new XiaomiAdvertisement(frame).event).to.deep.equal({
+					moisture,
+				});
+			}
+		});
+
 		it("Mi-Flora: Illuminance", () => {
 			const frame = Buffer.from(
 				"71209800ef795d658d7cc40d071003fe4c00",

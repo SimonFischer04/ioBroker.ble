@@ -244,6 +244,12 @@ const adapter = utils.adapter({
 
 function startScanProcess() {
 	const args: string[] = ["-s", ...services];
+	const manufacturerIds = [
+		...new Set(enabledPlugins.flatMap((p) => p.manufacturerIds ?? [])),
+	];
+	if (manufacturerIds.length > 0) {
+		args.push("--manufacturerIds", ...manufacturerIds.map(String));
+	}
 	if (adapter.config.hciDevice) {
 		args.push("-d", adapter.config.hciDevice.toString());
 	}

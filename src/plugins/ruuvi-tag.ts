@@ -22,39 +22,20 @@ import {
 const serviceUUID = "feaa";
 const manufacturerId = Buffer.from([0x99, 0x04]);
 
-// remember tested peripherals by their ID for 1h
-const testValidity = 1000 * 3600;
-const testedPeripherals = new Map<
-	string,
-	{ timestamp: number; result: boolean }
->();
-
 const plugin: Plugin<RuuviContext> = {
 	name: "ruuvi-tag",
 	description: "Ruuvi Tag",
 
 	advertisedServices: [serviceUUID],
+	manufacturerIds: [0x0499],
 
 	isHandling: (peripheral: PeripheralInfo) => {
-		const cached = testedPeripherals.get(peripheral.id);
-		if (cached && cached.timestamp >= Date.now() - testValidity) {
-			// we have a recent test result, return it
-			return cached.result;
-		}
-		// we have no quick check, so try to create a context
-		let ret = false;
+		// Check each advertisement: a device may also send unrelated or empty frames.
 		try {
-			const ctx = plugin.createContext(peripheral);
-			ret = ctx != null;
+			return plugin.createContext(peripheral) != null;
 		} catch (e) {
-			/* all good */
+			return false;
 		}
-		// store the test result
-		testedPeripherals.set(peripheral.id, {
-			timestamp: Date.now(),
-			result: ret,
-		});
-		return ret;
 	},
 
 	createContext: (peripheral: PeripheralInfo) => {

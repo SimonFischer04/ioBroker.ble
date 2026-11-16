@@ -164,6 +164,15 @@ const adapter = utils.adapter({
 });
 function startScanProcess() {
   const args = ["-s", ...services];
+  const manufacturerIds = [
+    ...new Set(enabledPlugins.flatMap((p) => {
+      var _a;
+      return (_a = p.manufacturerIds) != null ? _a : [];
+    }))
+  ];
+  if (manufacturerIds.length > 0) {
+    args.push("--manufacturerIds", ...manufacturerIds.map(String));
+  }
   if (adapter.config.hciDevice) {
     args.push("-d", adapter.config.hciDevice.toString());
   }
