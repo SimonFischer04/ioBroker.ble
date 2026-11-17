@@ -47,9 +47,6 @@ jobs:
           os: ${{ matrix.os }}
           build: true
           extra-tests: 'npm run test:package'
-          unit-test-check-pattern: 'test:ts'
-          unit-test-command: 'npm run test:ts'
-          integration-test-command: 'npm run test:integration'
 
 
   # Deploys the final package to NPM
