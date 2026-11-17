@@ -6,8 +6,7 @@ const adapterDir = path.join(__dirname, "..");
 
 // Run tests
 tests.integration(adapterDir, {
-	// Keep integration setup compatible with the Node 18/20 test matrix.
-	// The testing library defaults to the controller's development release.
+	// Use a reproducible controller version instead of a moving development build.
 	controllerVersion: "7.2.5",
 	allowedExitCodes: [11],
 

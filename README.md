@@ -45,6 +45,7 @@ If you have any device transmitting specially encoded information via advertisem
 	### __WORK IN PROGRESS__
 -->
 ### __WORK IN PROGRESS__
+* **BREAKING:** Require Node.js 22.19 or newer; test Node.js 22, 24, and 26 on Linux, Windows, and macOS.
 * Added BTHome signed counters, signed power, volume storage, and direction measurements.
 * Fixed discovery and decoding of Ruuvi Tag manufacturer-only advertisements, including packets received after empty or unrelated frames.
 * Ignore invalid Mi Flora soil moisture readings above 100% to preserve the last valid measurement.

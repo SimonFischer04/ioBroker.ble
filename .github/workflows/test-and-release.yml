@@ -14,6 +14,10 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+-**"
   pull_request: {}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Performs quick checks before the expensive test runs
   check-and-lint:
@@ -22,23 +26,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: ioBroker/testing-action-check@v1
+      - uses: ioBroker/testing-action-check@v2
         with:
-          node-version: '18.x'
+          node-version: '24.x'
           type-checking: true
           lint: true
 
 
   # Runs adapter tests on all supported node versions and OSes
   adapter-tests:
+    needs: [check-and-lint]
     if: contains(github.event.head_commit.message, '[skip ci]') == false
 
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
-        node-version: [18.x, 20.x]
-        os: [ubuntu-latest] # TODO: Get Windows and MacOS to work again 🤷🏻‍♂️
+        node-version: [22.x, 24.x, 26.x]
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
       - uses: ioBroker/testing-action-adapter@v1
@@ -62,7 +68,7 @@ jobs:
     steps:
       - uses: ioBroker/testing-action-deploy@v1
         with:
-          node-version: "18.x" # This should be LTS
+          node-version: "24.x"
           build: 'true'
           npm-token: ${{ secrets.NPM_TOKEN }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
