@@ -24,6 +24,8 @@ If you have multiple bluetooth devices on your system, select the one to use fro
 In the textbox below, enter all UUIDs of the advertised services you want to record (as found in the nRF Connect app).
 
 ## Plugin system
+Build the adapter from source with `npm ci` followed by `npm run build`. The generated `build/` and `admin/build/` directories are not tracked in Git. Published npm packages include the generated files; installation directly from Git is disabled with `common.nogit`.
+
 The adapter supports extension via plugins. Those define which advertised services should be listened to and how to translate the data. The plugin structure is defined in https://github.com/AlCalzone/ioBroker.ble/blob/master/src/plugins/plugin.ts and an example of a working plugin is defined here https://github.com/AlCalzone/ioBroker.ble/blob/master/src/plugins/_default.ts
 
 Plugins can also declare `manufacturerIds`, an optional list of Bluetooth company identifiers, to receive manufacturer data from devices that do not advertise a matching service. The Ruuvi Tag plugin uses company identifier `0x0499`. When running a remote scanner, include `--manufacturerIds 1177` alongside its service filters to receive these packets.

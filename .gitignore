@@ -289,6 +289,11 @@ __pycache__/
 
 # compiled test-files
 *.test.js
+
+# Generated adapter and admin bundles; built locally and in CI (common.nogit).
+/build/
+/admin/build/
+
 /.nyc_output
 coverage/
 
