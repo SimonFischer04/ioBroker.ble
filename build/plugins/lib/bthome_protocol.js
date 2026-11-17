@@ -47,6 +47,17 @@ const multilevelSensorsArray = [
   { id: 9, label: "count", signed: false, size: 1 },
   { id: 61, label: "count", signed: false, size: 2 },
   { id: 62, label: "count", signed: false, size: 4 },
+  { id: 89, label: "count", signed: true, size: 1 },
+  { id: 90, label: "count", signed: true, size: 2 },
+  { id: 91, label: "count", signed: true, size: 4 },
+  {
+    id: 94,
+    label: "direction",
+    signed: false,
+    size: 2,
+    factor: 0.01,
+    unit: "\xB0"
+  },
   {
     id: 67,
     label: "current",
@@ -203,6 +214,14 @@ const multilevelSensorsArray = [
     unit: "W"
   },
   {
+    id: 92,
+    label: "power",
+    signed: true,
+    size: 4,
+    factor: 0.01,
+    unit: "W"
+  },
+  {
     id: 4,
     label: "pressure",
     signed: false,
@@ -295,6 +314,14 @@ const multilevelSensorsArray = [
     size: 2,
     factor: 1e-3,
     unit: "m3/hr"
+  },
+  {
+    id: 85,
+    label: "volume storage",
+    signed: false,
+    size: 4,
+    factor: 1e-3,
+    unit: "L"
   },
   {
     id: 70,

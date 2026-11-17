@@ -39,6 +39,17 @@ const multilevelSensorsArray: BTHomeMultilevelSensorDefinition[] = [
 	{ id: 0x09, label: "count", signed: false, size: 1 },
 	{ id: 0x3d, label: "count", signed: false, size: 2 },
 	{ id: 0x3e, label: "count", signed: false, size: 4 },
+	{ id: 0x59, label: "count", signed: true, size: 1 },
+	{ id: 0x5a, label: "count", signed: true, size: 2 },
+	{ id: 0x5b, label: "count", signed: true, size: 4 },
+	{
+		id: 0x5e,
+		label: "direction",
+		signed: false,
+		size: 2,
+		factor: 0.01,
+		unit: "°",
+	},
 	{
 		id: 0x43,
 		label: "current",
@@ -195,6 +206,14 @@ const multilevelSensorsArray: BTHomeMultilevelSensorDefinition[] = [
 		unit: "W",
 	},
 	{
+		id: 0x5c,
+		label: "power",
+		signed: true,
+		size: 4,
+		factor: 0.01,
+		unit: "W",
+	},
+	{
 		id: 0x04,
 		label: "pressure",
 		signed: false,
@@ -287,6 +306,14 @@ const multilevelSensorsArray: BTHomeMultilevelSensorDefinition[] = [
 		size: 2,
 		factor: 0.001,
 		unit: "m3/hr",
+	},
+	{
+		id: 0x55,
+		label: "volume storage",
+		signed: false,
+		size: 4,
+		factor: 0.001,
+		unit: "L",
 	},
 	{
 		id: 0x46,

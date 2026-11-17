@@ -54,7 +54,7 @@ const plugin = {
     };
     const duplicates = /* @__PURE__ */ new Map();
     for (const ms of context.multilevelSensors) {
-      const id = ms.label.toLowerCase();
+      const id = ms.label.toLowerCase().replace(/[()]+/g, "").replace(/ /g, "_");
       const count = (_a = duplicates.get(id)) != null ? _a : 0;
       duplicates.set(id, count + 1);
       const stateId = id + (count > 0 ? `_${count + 1}` : "");
@@ -182,7 +182,7 @@ const plugin = {
     const duplicates = /* @__PURE__ */ new Map();
     const ret = {};
     for (const ms of context.multilevelSensors) {
-      const id = ms.label.toLowerCase();
+      const id = ms.label.toLowerCase().replace(/[()]+/g, "").replace(/ /g, "_");
       const count = (_a = duplicates.get(id)) != null ? _a : 0;
       duplicates.set(id, count + 1);
       const stateId = id + (count > 0 ? `_${count + 1}` : "");

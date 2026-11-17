@@ -86,7 +86,10 @@ const plugin: Plugin<BTHomeContext> = {
 		const duplicates = new Map<string, number>();
 
 		for (const ms of context.multilevelSensors) {
-			const id = ms.label.toLowerCase();
+			const id = ms.label
+				.toLowerCase()
+				.replace(/[()]+/g, "")
+				.replace(/ /g, "_");
 			const count = duplicates.get(id) ?? 0;
 			duplicates.set(id, count + 1);
 			const stateId = id + (count > 0 ? `_${count + 1}` : "");
@@ -223,7 +226,10 @@ const plugin: Plugin<BTHomeContext> = {
 		const ret: Record<string, any> = {};
 
 		for (const ms of context.multilevelSensors) {
-			const id = ms.label.toLowerCase();
+			const id = ms.label
+				.toLowerCase()
+				.replace(/[()]+/g, "")
+				.replace(/ /g, "_");
 			const count = duplicates.get(id) ?? 0;
 			duplicates.set(id, count + 1);
 
