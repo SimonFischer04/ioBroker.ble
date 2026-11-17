@@ -1,6 +1,6 @@
 # Plan: zentrale Bluetooth-Infrastruktur in `ioBroker.ble`
 
-Status: Phase 0, 1a und 1b umgesetzt, Phase 2 spezifiziert · Stand 2026-11-17
+Status: Phase 0, 1a und 1b umgesetzt, Phase 2 spezifiziert, pvvx-Protokoll beschrieben · Stand 2026-11-17
 
 ## Wie dieses Dokument zu lesen ist
 
@@ -11,13 +11,15 @@ Dieses Dokument beschreibt **Architektur und Entscheidungen**. Es ist keine Arbe
 | `AGENTS.md` (im Repo-Stamm) | Aufbau des Codes, wie er jetzt ist, Regeln, Befehle, Stolperfallen |
 | `docs/plan-bluetooth-infrastructure.md` (dieses) | Warum es so gebaut wird: Zielbild, Entscheidungen E1–E8, Phasen, Risiken |
 | `docs/spec-phase-2-gatt.md` | Verbindliche Umsetzung von Phase 2, für beide Repos |
+| `docs/pvvx-protocol.md` | Protokoll der pvvx-Firmware für Zeit, Version und Firmware-Update, mit Testvektoren. Grundlage für Phase 3 und 4 |
 
 | Phase | Stand | Spezifikation |
 |---|---|---|
 | 0, 1a | umgesetzt (dieses Repo) | – |
 | 1b | umgesetzt (`DrozmotiX/ioBroker.esphome`, Branch `ccr-ble-gateway-forwarding`) | – |
 | 2 | offen | `docs/spec-phase-2-gatt.md` |
-| 3, 4 | **blockiert**: Das pvvx-Protokoll ist nicht spezifiziert (Abschnitt 5). Erst `docs/pvvx-protocol.md` erstellen, dann die Spezifikation. | fehlt |
+| 3 | offen. Das Protokoll steht in `docs/pvvx-protocol.md`. Hängt nur von Phase 2 ab. | fehlt |
+| 4 | offen. Das Protokoll steht in `docs/pvvx-protocol.md`. Hängt von Phase 2 ab und braucht zusätzlich `gatt:writeSequence`. | fehlt |
 | 5, 6 | offen | fehlt |
 
 Eine Phase ohne Spezifikation wird nicht umgesetzt.
@@ -240,11 +242,16 @@ Ein Gateway, das GATT-Verbindungen aufbauen kann, meldet das mit `gateway:announ
 
 ## 5. pvvx-Driver (erster Anwendungsfall)
 
-Protokoll-Grundlage laut pvvx-README: Service `0x1F10`, Characteristic `0x1F1F`. Befehle sind ein Byte plus Payload, zum Beispiel `0x23` Get/Set Time, `0x55` Config, `0x01` Name, `0x10` MAC.
-**Noch zu verifizieren** (aus `TelinkMiFlasher.html` bzw. `utils/ble_ota.py`):
-- das Byte-Layout von `0x23`,
-- ob die Firmware die lokale Zeit oder UTC plus Offset erwartet,
-- die Telink-OTA-Service- und Characteristic-UUIDs, das Paketformat (Index und CRC), das Pacing und die Start/End-Befehle.
+Das Protokoll steht in `docs/pvvx-protocol.md`, abgeleitet aus Firmware, Web-Flasher und `utils/ble_ota.py`. Was davon die ursprünglichen Annahmen dieses Abschnitts ändert:
+
+- **Die Uhr des Geräts kennt keine Zeitzone.** `0x23` setzt einen Sekundenzähler, den das Display direkt als Uhrzeit anzeigt. Gesendet wird deshalb die lokale Zeit als Unix-Sekunden (UTC plus Abstand zu UTC). Nach jeder Zeitumstellung geht die Uhr eine Stunde falsch, bis sie neu gesetzt wird. Das bestätigt den Auslöser „Änderung des UTC-Offsets“ in 5.1.
+- **Version und Modell kommen aus `0x55`.** Die Antwort enthält die Firmware-Version (BCD) und die Hardware-ID. Die Hardware-ID bestimmt das Image, nicht der Gerätename.
+- **Die Images kommen aus `firmware.json`** im Firmware-Repo (Index = Hardware-ID), nicht aus GitHub-Releases. Original-Firmware des Herstellers spielen wir nie ein.
+- **Nur Images bis 128 KiB.** Größere brauchen ein erweitertes Update (`0x73`), das die Schlüssel und den Messwertspeicher des Geräts löscht. Das sendet der Driver nie.
+- **Geräte mit PIN-Code sind nicht erreichbar**, weil sie Pairing verlangen. Der Driver meldet das als Fehler.
+- **Erkennen nur über eine Verbindung.** Aus den Advertisements ist ein pvvx-Gerät nicht sicher zu erkennen. Der Driver behandelt nur Geräte, die der Benutzer ausgewählt hat, und prüft sie beim ersten Verbinden mit `0x55`.
+- **Erfolg eines Updates** prüft man nach dem Neustart des Geräts mit einer neuen Verbindung und `0x55`. Die Advertisements enthalten die Version nicht.
+- **Ein Update sind etwa 5400 Pakete** mit höchstens 16 s Pause dazwischen. Ohne `gatt:writeSequence` wären das über 6000 Wege durch die States-DB.
 
 ### 5.1 Zeitsynchronisierung
 
@@ -265,7 +272,7 @@ Alles läuft als `withSession(address, …, { priority: low })`. Ein laufendes O
 ### 5.2 Firmware-Updates (OTA)
 
 States:
-- `firmware.version` (read, über Befehl / Device-Info)
+- `firmware.version` (read, über `0x55`)
 - `firmware.available`
 - `firmware.update` (Button)
 - `firmware.progress` (%)
@@ -273,14 +280,14 @@ States:
 
 Dazu kommt instanzweit `firmware.updateAll`.
 
-- **Quelle der Firmware:** Die Dateien liegen im ioBroker-Dateispeicher (`ble.0/firmware/…`), per Admin hochgeladen, oder werden optional aus den GitHub-Releases von pvvx geholt. Das Modell (`LYWSD03MMC`, `MHO-C401`, …) bestimmt das Image.
+- **Quelle der Firmware:** `firmware.json` im Repo von pvvx, Index ist die Hardware-ID (siehe `docs/pvvx-protocol.md`, 6.3). Optional eine Datei im ioBroker-Dateispeicher (`ble.0/firmware/…`), per Admin hochgeladen.
 - **Vorab-Prüfungen:**
   - Modell bzw. Hardwareversion passt zum Image,
   - Akku über 40 % (laut pvvx-Hinweis für LYWSD03MMC),
   - Image ≤ 128 KB,
   - RSSI des besten Gateways über einem Schwellwert.
 - **Rollout:** streng seriell, ein Gerät nach dem anderen. Pro Gerät eine Session mit hoher Priorität und langem Timeout. Bricht ein Gerät ab, wird das gemeldet und der Rollout läuft weiter. Ein abgebrochenes OTA lässt laut pvvx die alte Firmware intakt.
-- Nach dem Update wird auf das erste Advertisement mit neuer Version gewartet, danach die Zeit synchronisiert.
+- Nach dem Update neu verbinden, mit `0x55` die neue Version prüfen, danach die Zeit synchronisieren.
 
 ---
 
@@ -415,5 +422,6 @@ Noch nicht getestet ist der Weg mit einem echten ESP32 und mit beiden Adaptern i
 1. Die Weiterleitung (Phase 1b) mit einem echten ESP32-Proxy und beiden Adaptern in einer Installation ausprobieren.
 2. Den Branch in `ioBroker.esphome` als PR gegen `v2` stellen und mit den Maintainern abstimmen.
 3. Phase 2 nach `docs/spec-phase-2-gatt.md` umsetzen.
-4. Das pvvx-Protokoll aus dem Quellcode von Flasher und Firmware herausziehen und als `docs/pvvx-protocol.md` festhalten: Byte-Layout von `0x23` (Zeit), Bedeutung der Zeit (lokal oder UTC), Telink-OTA (UUIDs, Paketformat, Prüfsumme, Ablauf), dazu Testvektoren. Ohne dieses Dokument werden Phase 3 und 4 nicht begonnen.
-5. Danach die Spezifikationen für Phase 3 und 4 schreiben.
+4. Mit Phase 2 und einem echten Thermometer die offenen Punkte aus `docs/pvvx-protocol.md`, Abschnitt 9, klären. Vor allem: welche Schreibart über einen ESPHome-Proxy funktioniert.
+5. Die Spezifikation für Phase 3 (Zeitsync) schreiben. Sie braucht nur Phase 2.
+6. Die Spezifikation für Phase 4 (Firmware-Update) schreiben, inklusive `gatt:writeSequence`, erst nach Punkt 4.

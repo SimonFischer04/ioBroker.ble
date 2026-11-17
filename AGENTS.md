@@ -16,6 +16,7 @@ That work is planned in `docs/`:
 | --------------------------------------- | -------------------------------------------------------------------------------------- |
 | `docs/plan-bluetooth-infrastructure.md` | Architecture, decisions (E1 – E8) and the phases. German. Read sections 2 and 7 first. |
 | `docs/spec-phase-2-gatt.md`             | Implementation specification of phase 2 (GATT connections). German. Follow it literally. |
+| `docs/pvvx-protocol.md`                 | GATT protocol of the pvvx thermometer firmware (time, version, firmware update), with test vectors. German. |
 
 **If you implement a phase, the specification of that phase is binding.** Where it does not answer a question, stop
 and ask instead of guessing. Do not implement a phase that has no specification.
