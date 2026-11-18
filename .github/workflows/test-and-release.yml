@@ -65,10 +65,14 @@ jobs:
       startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
 
+    # npm uses GitHub OIDC; contents access creates the GitHub release.
+    permissions:
+      contents: write
+      id-token: write
+
     steps:
       - uses: ioBroker/testing-action-deploy@v1
         with:
           node-version: "24.x"
           build: 'true'
-          npm-token: ${{ secrets.NPM_TOKEN }}
           github-token: ${{ secrets.GITHUB_TOKEN }}

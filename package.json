@@ -29,7 +29,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/AlCalzone/ioBroker.ble"
+    "url": "https://github.com/SimonFischer04/ioBroker.ble"
   },
   "engines": {
     "node": ">=22.19"

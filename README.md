@@ -43,6 +43,23 @@ If you have any device transmitting specially encoded information via advertisem
 * `"ruuvi-tag"`: [Ruuvi Tag](https://tag.ruuvi.com/) multisensor with firmware versions v1 and v2. **Untested, please give feedback!** 
 * `"bthome"`: Sensors using the [BTHome](https://bthome.io) protocol. For now this is limited to the `v2` revision of the protocol and does not support encrypted packets.
 
+## Publishing releases
+
+Releases use [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers) through `ioBroker/testing-action-deploy@v1`. A package owner must configure a GitHub Actions trusted publisher in the npm settings for `iobroker.ble` before the first release:
+
+| npm setting | Value for this fork |
+| --- | --- |
+| Organization or user | `SimonFischer04` |
+| Repository | `ioBroker.ble` |
+| Workflow filename | `test-and-release.yml` |
+| Environment | Leave blank |
+
+The npm account configuring this must have publish rights for the package. The package's `repository.url` must match the repository running the release workflow; update both the npm publisher settings and this field if publishing from another repository.
+
+For an intended release, update `package.json` and `io-package.json` to the new version, merge the release changes, and push the matching `v<version>` tag to run the checks, build, and publish jobs. The deploy action uses Node.js 24 and updates npm to version 11 for OIDC authentication. It builds the adapter and admin bundles before publication. Pre-release tags such as `v1.0.0-beta.0` publish under the npm `next` dist-tag.
+
+No `NPM_TOKEN` secret is needed. The deploy job has `id-token: write` for npm authentication and `contents: write` for creating the GitHub release. Pull requests run the checks and tests and skip publishing. Verify the first intended release succeeds before removing any old npm publish token.
+
 ## Changelog
 <!--
 	Placeholder for next release:
