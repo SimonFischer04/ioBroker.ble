@@ -26,7 +26,7 @@ function parseAdvertisement(data: Buffer): BTHomeAdvertisement | undefined {
 	let advertisement: BTHomeAdvertisement;
 	try {
 		advertisement = new BTHomeAdvertisement(data);
-	} catch (e) {
+	} catch {
 		_.adapter.log.debug(`bthome >> failed to parse data`);
 		return;
 	}
@@ -48,12 +48,16 @@ const plugin: Plugin<BTHomeContext> = {
 
 	createContext: (peripheral) => {
 		const data = getServiceData(peripheral, "fcd2");
-		if (data == undefined) return;
+		if (data == undefined) {
+			return;
+		}
 
 		_.adapter.log.debug(`bthome >> got data: ${data.toString("hex")}`);
 
 		const advertisement = parseAdvertisement(data);
-		if (!advertisement) return;
+		if (!advertisement) {
+			return;
+		}
 
 		return {
 			packetId: advertisement.packetId,
@@ -65,7 +69,9 @@ const plugin: Plugin<BTHomeContext> = {
 	},
 
 	defineObjects: (context) => {
-		if (context == undefined) return;
+		if (context == undefined) {
+			return;
+		}
 
 		const deviceObject: DeviceObjectDefinition = {
 			// no special definitions neccessary
@@ -202,9 +208,9 @@ const plugin: Plugin<BTHomeContext> = {
 						native: undefined,
 					},
 					{
-						id: stateId + "_steps",
+						id: `${stateId}_steps`,
 						common: {
-							name: stateName + " steps",
+							name: `${stateName} steps`,
 							read: true,
 							write: false,
 							type: "number",
@@ -220,7 +226,9 @@ const plugin: Plugin<BTHomeContext> = {
 	},
 
 	getValues: (context) => {
-		if (context == undefined) return;
+		if (context == undefined) {
+			return;
+		}
 
 		const duplicates = new Map<string, number>();
 		const ret: Record<string, any> = {};
@@ -269,7 +277,7 @@ const plugin: Plugin<BTHomeContext> = {
 
 			ret[stateId] = evt.event ?? null;
 			if (evt.type === "dimmer") {
-				ret[stateId + "_steps"] = evt.event?.steps ?? null;
+				ret[`${stateId}_steps`] = evt.event?.steps ?? null;
 			}
 		}
 

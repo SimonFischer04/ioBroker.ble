@@ -447,15 +447,10 @@ export type BTHomeEvent =
 	  }
 	| {
 			type: "dimmer";
-			event?:
-				| {
-						event: "rotate left"; // 0x01
-						steps: number;
-				  }
-				| {
-						event: "rotate left"; // 0x02
-						steps: number;
-				  };
+			event?: {
+				event: "rotate left"; // 0x01
+				steps: number;
+			};
 	  };
 
 export type SpecialSensors =

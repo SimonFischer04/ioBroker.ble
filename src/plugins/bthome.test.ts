@@ -1,9 +1,10 @@
+import type BTHomeModule = require("./bthome");
 import { expect } from "chai";
 import * as proxyquireModule from "proxyquire";
 import { createGlobalMock } from "../../test/mocks/global";
 import type { PeripheralInfo } from "../lib/scanProcessInterface";
 
-const plugin = proxyquireModule.noPreserveCache()<typeof import("./bthome")>(
+const plugin = proxyquireModule.noPreserveCache()<typeof BTHomeModule>(
 	"./bthome",
 	{ "../lib/global": createGlobalMock({}) },
 );

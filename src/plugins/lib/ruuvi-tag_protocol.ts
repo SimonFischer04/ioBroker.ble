@@ -79,8 +79,7 @@ export function parseDataFormat5(data: Buffer): RuuviContext {
 	pressure = pressure !== 0xffff ? (pressure + 50000) / 100 : undefined; // hPa
 
 	let acceleration:
-		| { [key in "x" | "y" | "z"]: number | undefined }
-		| undefined = {
+		{ [key in "x" | "y" | "z"]: number | undefined } | undefined = {
 		x: data.readInt16BE(7),
 		y: data.readInt16BE(9),
 		z: data.readInt16BE(11),
@@ -95,23 +94,34 @@ export function parseDataFormat5(data: Buffer): RuuviContext {
 		acceleration.x == undefined &&
 		acceleration.y == undefined &&
 		acceleration.z == undefined
-	)
+	) {
 		acceleration = undefined;
+	}
 
 	const power = data.readUInt16BE(13);
 	let battery: number | undefined;
 	let txPower: number | undefined;
-	if (power >>> 5 !== 0b111_1111_1111) battery = (power >>> 5) * 0.001 + 1.6;
-	if ((power & 0b11111) !== 0b11111) txPower = (power & 0b11111) * 2 - 40;
+	if (power >>> 5 !== 0b111_1111_1111) {
+		battery = (power >>> 5) * 0.001 + 1.6;
+	}
+	if ((power & 0b11111) !== 0b11111) {
+		txPower = (power & 0b11111) * 2 - 40;
+	}
 
 	let movementCounter: number | undefined = data[15];
-	if (movementCounter === 0xff) movementCounter = undefined;
+	if (movementCounter === 0xff) {
+		movementCounter = undefined;
+	}
 
 	let sequenceNumber: number | undefined = data.readUInt16BE(16);
-	if (sequenceNumber === 0xffff) sequenceNumber = undefined;
+	if (sequenceNumber === 0xffff) {
+		sequenceNumber = undefined;
+	}
 
 	let macAddress: string | undefined = data.slice(18, 24).toString("hex");
-	if (macAddress === "ffffffffffff") macAddress = undefined;
+	if (macAddress === "ffffffffffff") {
+		macAddress = undefined;
+	}
 
 	return stripUndefinedProperties({
 		dataFormat,

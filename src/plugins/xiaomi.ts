@@ -22,7 +22,7 @@ function parseAdvertisementEvent(data: Buffer): XiaomiEvent | undefined {
 	let advertisement: XiaomiAdvertisement;
 	try {
 		advertisement = new XiaomiAdvertisement(data);
-	} catch (e) {
+	} catch {
 		_.adapter.log.debug(`xiaomi >> failed to parse data`);
 		return;
 	}
@@ -57,8 +57,9 @@ const plugin: Plugin<XiaomiContext> = {
 			!p.advertisement ||
 			!p.advertisement.serviceData ||
 			!p.advertisement.serviceData.some((entry) => entry.uuid === "fe95")
-		)
+		) {
 			return false;
+		}
 
 		const mac = p.address.toLowerCase();
 		const cached = testedPeripherals.get(mac);
@@ -85,18 +86,24 @@ const plugin: Plugin<XiaomiContext> = {
 
 	createContext: (peripheral: PeripheralInfo) => {
 		const data = getServiceData(peripheral, "fe95");
-		if (data == undefined) return;
+		if (data == undefined) {
+			return;
+		}
 
 		_.adapter.log.debug(`xiaomi >> got data: ${data.toString("hex")}`);
 
 		const event = parseAdvertisementEvent(data);
-		if (event == undefined) return;
+		if (event == undefined) {
+			return;
+		}
 
 		return { event };
 	},
 
 	defineObjects: (context: XiaomiContext) => {
-		if (context == undefined || context.event == undefined) return;
+		if (context == undefined || context.event == undefined) {
+			return;
+		}
 
 		const deviceObject: DeviceObjectDefinition = {
 			// no special definitions neccessary
@@ -213,10 +220,10 @@ const plugin: Plugin<XiaomiContext> = {
 					read: true,
 					write: false,
 					states: {
-						"0": "Idle",
-						"1": "Heating",
-						"2": "Cooling",
-						"3": "Keeping warm",
+						0: "Idle",
+						1: "Heating",
+						2: "Cooling",
+						3: "Keeping warm",
 					},
 				},
 				native: undefined,
@@ -226,7 +233,7 @@ const plugin: Plugin<XiaomiContext> = {
 		for (const key of Object.keys(event)) {
 			if (key.startsWith("unknown ")) {
 				stateObjects.push({
-					id: key.replace(/[\(\)]+/g, "").replace(" ", "_"),
+					id: key.replace(/[()]+/g, "").replace(" ", "_"),
 					common: {
 						role: "value",
 						name: key,
@@ -242,7 +249,9 @@ const plugin: Plugin<XiaomiContext> = {
 		return ret;
 	},
 	getValues: (context: XiaomiContext) => {
-		if (context == null || context.event == null) return;
+		if (context == null || context.event == null) {
+			return;
+		}
 
 		for (const [prop, value] of entries(context.event)) {
 			_.adapter.log.debug(`xiaomi >> got ${prop} update => ${value}`);

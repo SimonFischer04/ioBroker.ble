@@ -2,9 +2,7 @@ import { expect } from "chai";
 import { XiaomiAdvertisement } from "./xiaomi_protocol";
 
 type OperationModes =
-	| "mi-flora-normal"
-	| "mi-flora-uninitialized"
-	| "temp-sensor-normal";
+	"mi-flora-normal" | "mi-flora-uninitialized" | "temp-sensor-normal";
 function assertFlags(
 	operationMode: OperationModes,
 	parsed: XiaomiAdvertisement,

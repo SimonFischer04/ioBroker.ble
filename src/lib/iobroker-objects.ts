@@ -6,7 +6,13 @@ import type {
 import { Global as _ } from "./global";
 import type { PeripheralInfo } from "./scanProcessInterface";
 
-/** Extends a device object in the ioBroker objects DB */
+/**
+ * Extends a device object in the ioBroker objects DB
+ *
+ * @param deviceId Device object ID
+ * @param peripheral Discovered BLE peripheral
+ * @param object Plugin-specific object definition
+ */
 export async function extendDevice(
 	deviceId: string,
 	peripheral: PeripheralInfo,

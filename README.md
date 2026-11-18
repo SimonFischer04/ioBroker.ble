@@ -26,6 +26,8 @@ In the textbox below, enter all UUIDs of the advertised services you want to rec
 ## Plugin system
 Build the adapter from source with `npm ci` followed by `npm run build`. The generated `build/` and `admin/build/` directories are not tracked in Git. Published npm packages include the generated files; installation directly from Git is disabled with `common.nogit`.
 
+Run `npm run lint` to check the adapter, React admin UI, tests, and JavaScript helpers using the shared ioBroker ESLint configuration. Use `npm run lint -- --fix` to apply automatic fixes.
+
 The adapter supports extension via plugins. Those define which advertised services should be listened to and how to translate the data. The plugin structure is defined in https://github.com/AlCalzone/ioBroker.ble/blob/master/src/plugins/plugin.ts and an example of a working plugin is defined here https://github.com/AlCalzone/ioBroker.ble/blob/master/src/plugins/_default.ts
 
 Plugins can also declare `manufacturerIds`, an optional list of Bluetooth company identifiers, to receive manufacturer data from devices that do not advertise a matching service. The Ruuvi Tag plugin uses company identifier `0x0499`. When running a remote scanner, include `--manufacturerIds 1177` alongside its service filters to receive these packets.

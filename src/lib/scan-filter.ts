@@ -1,15 +1,25 @@
 import type { PeripheralInfo } from "./scanProcessInterface";
 
-/** Match services or manufacturer data while preserving an unfiltered scan. */
+/**
+ * Match services or manufacturer data while preserving an unfiltered scan.
+ *
+ * @param peripheral Discovered BLE peripheral
+ * @param services Service UUIDs to accept
+ * @param manufacturerIds Bluetooth company identifiers to accept
+ */
 export function matchesScanFilter(
 	peripheral: PeripheralInfo,
 	services: readonly string[],
 	manufacturerIds: readonly number[],
 ): boolean {
-	if (services.length === 0) return true;
+	if (services.length === 0) {
+		return true;
+	}
 
 	const advertisement = peripheral.advertisement;
-	if (!advertisement) return false;
+	if (!advertisement) {
+		return false;
+	}
 	if (
 		advertisement.serviceUuids?.some((uuid) => services.includes(uuid)) ||
 		advertisement.serviceData?.some(({ uuid }) => services.includes(uuid))

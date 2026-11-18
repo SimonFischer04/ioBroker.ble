@@ -4,7 +4,7 @@
 const packet = Buffer.from("30588b090e8e1135ecaae408", "hex");
 const X = require("../build/plugins/lib/xiaomi_protocol").XiaomiAdvertisement;
 
-const test = new X(packet);
+new X(packet);
 
 // frame control: 0c08
 // -- version = 0

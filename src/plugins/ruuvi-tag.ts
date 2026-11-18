@@ -33,13 +33,15 @@ const plugin: Plugin<RuuviContext> = {
 		// Check each advertisement: a device may also send unrelated or empty frames.
 		try {
 			return plugin.createContext(peripheral) != null;
-		} catch (e) {
+		} catch {
 			return false;
 		}
 	},
 
 	createContext: (peripheral: PeripheralInfo) => {
-		if (!peripheral.advertisement) return;
+		if (!peripheral.advertisement) {
+			return;
+		}
 		let data = getServiceData(peripheral, serviceUUID);
 		if (data != undefined) {
 			const url = data.toString("utf8");
@@ -48,7 +50,9 @@ const plugin: Plugin<RuuviContext> = {
 			);
 			// data format 2 or 4 - extract from URL hash
 			const parsedUrl = nodeUrl.parse(url);
-			if (!parsedUrl.hash) return;
+			if (!parsedUrl.hash) {
+				return;
+			}
 			data = Buffer.from(parsedUrl.hash, "base64");
 			return parseDataFormat2or4(data);
 		} else if (
@@ -75,16 +79,17 @@ const plugin: Plugin<RuuviContext> = {
 				return parseDataFormat3(data);
 			} else if (data[0] === 5) {
 				return parseDataFormat5(data);
-			} else {
-				_.adapter.log.debug(
-					`ruuvi-tag >> unsupported data format ${data[0]}`,
-				);
 			}
+			_.adapter.log.debug(
+				`ruuvi-tag >> unsupported data format ${data[0]}`,
+			);
 		}
 	},
 
 	defineObjects: (context) => {
-		if (context == undefined) return;
+		if (context == undefined) {
+			return;
+		}
 
 		const deviceObject: DeviceObjectDefinition = {
 			// no special definitions neccessary
@@ -241,7 +246,9 @@ const plugin: Plugin<RuuviContext> = {
 		return ret;
 	},
 	getValues: (context) => {
-		if (context == null) return;
+		if (context == null) {
+			return;
+		}
 
 		// strip out unnecessary properties
 		const {
@@ -255,9 +262,15 @@ const plugin: Plugin<RuuviContext> = {
 		const { acceleration, ...ret } = remainder;
 		if (acceleration != null) {
 			const { x, y, z } = acceleration;
-			if (x != null) (ret as any).accelerationX = x;
-			if (y != null) (ret as any).accelerationY = y;
-			if (z != null) (ret as any).accelerationZ = z;
+			if (x != null) {
+				(ret as any).accelerationX = x;
+			}
+			if (y != null) {
+				(ret as any).accelerationY = y;
+			}
+			if (z != null) {
+				(ret as any).accelerationZ = z;
+			}
 		}
 		return ret;
 	},
