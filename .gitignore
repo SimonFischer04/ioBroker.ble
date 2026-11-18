@@ -293,6 +293,7 @@ __pycache__/
 # Generated adapter and admin bundles; built locally and in CI (common.nogit).
 /build/
 /admin/build/
+/bin/blerp.js
 
 /.nyc_output
 coverage/

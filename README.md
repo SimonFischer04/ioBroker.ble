@@ -1,14 +1,17 @@
-<img src="admin/ble.png" height="48" /> ioBroker.ble
+<img src="admin/ble2.png" height="48" /> ioBroker.ble2
 =================
 
-![Build Status](https://action-badges.now.sh/AlCalzone/ioBroker.tradfri)
+[![Test and Release](https://github.com/SimonFischer04/ioBroker.ble/actions/workflows/test-and-release.yml/badge.svg)](https://github.com/SimonFischer04/ioBroker.ble/actions/workflows/test-and-release.yml)
+[![npm version](https://img.shields.io/npm/v/iobroker.ble2.svg)](https://www.npmjs.com/package/iobroker.ble2)
+
+This is SimonFischer04's maintained fork of [ioBroker.ble](https://github.com/AlCalzone/ioBroker.ble), published independently as `iobroker.ble2`. The original authors and MIT license are retained.
 
 Monitor Bluetooth Low Energy (BLE) beacons and record their information. 
 Currently, only recording *advertised* service data is supported. You can monitor which services are advertised by using the nRF Connect app (service data UUIDs).
 Connecting and reading/writing service chararcteristics will be supported in a future version.
 
 ## Installation
-![Number of Installations](http://iobroker.live/badges/ble-installed.svg?break_cache=1) ![Number of Installations](http://iobroker.live/badges/ble-stable.svg?break_cache=1)
+![Number of Installations](http://iobroker.live/badges/ble2-installed.svg?break_cache=1) ![Number of Installations](http://iobroker.live/badges/ble2-stable.svg?break_cache=1)
 
 This adapter needs additional libraries to compile. See https://github.com/sandeepmistry/noble#prerequisites for detailed instructions.
 On Raspberry Pi and similar, this should do it: `sudo apt-get install bluetooth bluez libbluetooth-dev libudev-dev libcap2-bin`
@@ -23,12 +26,22 @@ which requires `libcap2-bin` to be installed.
 If you have multiple bluetooth devices on your system, select the one to use from the dropdown.
 In the textbox below, enter all UUIDs of the advertised services you want to record (as found in the nRF Connect app).
 
+### Moving from ble to ble2
+
+Install `iobroker.ble2` and create a new `ble2` instance. Copy your settings from the old `ble` instance. If both instances use the same Bluetooth device or remote scanner, disable the old instance before starting the new one.
+
+The new adapter creates its own objects and states under `ble2.<instance>.*`. Existing `ble.<instance>.*` objects and history are not renamed or deleted. Enable **Accept new devices** in the new instance to discover your sensors, then update scripts, aliases, and dashboards to use the new state IDs.
+
+Remote scanner command-line flags and the TCP protocol are unchanged. For scanner configuration supplied through environment variables, rename the `IOB_BLE_` prefix to `IOB_BLE2_`.
+
 ## Plugin system
 Build the adapter from source with `npm ci` followed by `npm run build`. The generated `build/` and `admin/build/` directories are not tracked in Git. Published npm packages include the generated files; installation directly from Git is disabled with `common.nogit`.
 
+For a standalone remote scanner, `npm run build:server` generates `bin/blerp.js`. This generated bundle is also ignored by Git; it loads the installed `@stoprocent/noble` driver at runtime.
+
 Run `npm run lint` to check the adapter, React admin UI, tests, and JavaScript helpers using the shared ioBroker ESLint configuration. Use `npm run lint -- --fix` to apply automatic fixes.
 
-The adapter supports extension via plugins. Those define which advertised services should be listened to and how to translate the data. The plugin structure is defined in https://github.com/AlCalzone/ioBroker.ble/blob/master/src/plugins/plugin.ts and an example of a working plugin is defined here https://github.com/AlCalzone/ioBroker.ble/blob/master/src/plugins/_default.ts
+The adapter supports extension via plugins. Those define which advertised services should be listened to and how to translate the data. The plugin structure is defined in https://github.com/SimonFischer04/ioBroker.ble/blob/master/src/plugins/plugin.ts and an example of a working plugin is defined here https://github.com/SimonFischer04/ioBroker.ble/blob/master/src/plugins/_default.ts
 
 Plugins can also declare `manufacturerIds`, an optional list of Bluetooth company identifiers, to receive manufacturer data from devices that do not advertise a matching service. The Ruuvi Tag plugin uses company identifier `0x0499`. When running a remote scanner, include `--manufacturerIds 1177` alongside its service filters to receive these packets.
 
@@ -45,7 +58,22 @@ If you have any device transmitting specially encoded information via advertisem
 
 ## Publishing releases
 
-Releases use [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers) through `ioBroker/testing-action-deploy@v1`. A package owner must configure a GitHub Actions trusted publisher in the npm settings for `iobroker.ble` before the first release:
+The npm package is `iobroker.ble2`; its ioBroker adapter name is `ble2`. The GitHub repository remains `SimonFischer04/ioBroker.ble`.
+
+For the first publication of this new package, sign in to npm with your own account and build and verify the package locally:
+
+```sh
+npm login
+npm ci
+npm run build
+npm test
+npm run test:integration
+npm publish --access public
+```
+
+This creates `iobroker.ble2` under the publishing account. Publishing a new package is subject to npm's package-name availability checks; no access to `iobroker.ble` is required.
+
+After that initial publication, configure a GitHub Actions trusted publisher in the npm settings for `iobroker.ble2`. Subsequent releases use [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers) through `ioBroker/testing-action-deploy@v1`:
 
 | npm setting | Value for this fork |
 | --- | --- |
@@ -54,7 +82,7 @@ Releases use [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers)
 | Workflow filename | `test-and-release.yml` |
 | Environment | Leave blank |
 
-The npm account configuring this must have publish rights for the package. The package's `repository.url` must match the repository running the release workflow; update both the npm publisher settings and this field if publishing from another repository.
+The npm account configuring this must have publish rights for `iobroker.ble2`. The package's `repository.url` must match the repository running the release workflow; update both the npm publisher settings and this field if publishing from another repository.
 
 For an intended release, update `package.json` and `io-package.json` to the new version, merge the release changes, and push the matching `v<version>` tag to run the checks, build, and publish jobs. The deploy action uses Node.js 24 and updates npm to version 11 for OIDC authentication. It builds the adapter and admin bundles before publication. Pre-release tags such as `v1.0.0-beta.0` publish under the npm `next` dist-tag.
 
@@ -66,6 +94,7 @@ No `NPM_TOKEN` secret is needed. The deploy job has `id-token: write` for npm au
 	### __WORK IN PROGRESS__
 -->
 ### __WORK IN PROGRESS__
+* **BREAKING:** Rename the maintained fork to `iobroker.ble2` with the `ble2` adapter namespace.
 * **BREAKING:** Require Node.js 22.19 or newer; test Node.js 22, 24, and 26 on Linux, Windows, and macOS.
 * Added BTHome signed counters, signed power, volume storage, and direction measurements.
 * Fixed discovery and decoding of Ruuvi Tag manufacturer-only advertisements, including packets received after empty or unrelated frames.

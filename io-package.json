@@ -1,6 +1,6 @@
 {
 	"common": {
-		"name": "ble",
+		"name": "ble2",
 		"version": "0.14.1",
 		"news": {
 			"0.14.1": {
@@ -94,18 +94,18 @@
 				"zh-cn": "现在可以在配置对话框中使用允许录制新设备的选项。适配器启动时会被禁用，启用时会在5分钟后自动禁用（#730、#729）\n修复：RSSI 现在将被更新，即使它没有改变 (#493)\n依赖更新，大量依赖更新......"
 			}
 		},
-		"title": "Bluetooth Low Energy (BLE)",
+		"title": "Bluetooth Low Energy (ble2)",
 		"titleLang": {
-			"en": "Bluetooth Low Energy (BLE)",
-			"de": "Bluetooth-Niedrigenergie (BLE)",
-			"ru": "Bluetooth с низким энергопотреблением (BLE)",
-			"pt": "Bluetooth de baixa energia (BLE)",
-			"nl": "Bluetooth lage energie (BLE)",
-			"fr": "Bluetooth à faible consommation d'énergie (BLE)",
-			"it": "Bluetooth a bassa energia (BLE)",
-			"es": "Bluetooth de baja energía (BLE)",
-			"pl": "Niskoenergetyczna łączność Bluetooth (BLE)",
-			"zh-cn": "低功耗蓝牙 (BLE)"
+			"en": "Bluetooth Low Energy (ble2)",
+			"de": "Bluetooth-Niedrigenergie (ble2)",
+			"ru": "Bluetooth с низким энергопотреблением (ble2)",
+			"pt": "Bluetooth de baixa energia (ble2)",
+			"nl": "Bluetooth lage energie (ble2)",
+			"fr": "Bluetooth à faible consommation d'énergie (ble2)",
+			"it": "Bluetooth a bassa energia (ble2)",
+			"es": "Bluetooth de baja energía (ble2)",
+			"pl": "Niskoenergetyczna łączność Bluetooth (ble2)",
+			"zh-cn": "低功耗蓝牙 (ble2)"
 		},
 		"desc": {
 			"en": "Monitor Bluetooth Low Energy (BLE) beacons",
@@ -119,7 +119,10 @@
 			"pl": "Monitor Bluetooth low energy (BLE) latarnie",
 			"zh-cn": "监测蓝牙低能源(BLE)信标"
 		},
-		"authors": ["AlCalzone <d.griesel@gmx.net>"],
+		"authors": [
+			"SimonFischer04 (https://github.com/SimonFischer04)",
+			"AlCalzone <d.griesel@gmx.net>"
+		],
 		"platform": "Javascript/Node.js",
 		"licenseInformation": {
 			"type": "free",
@@ -129,11 +132,11 @@
 		"main": "build/main.js",
 		"nogit": true,
 		"mode": "daemon",
-		"icon": "ble.png",
+		"icon": "ble2.png",
 		"enabled": true,
-		"extIcon": "https://raw.githubusercontent.com/AlCalzone/ioBroker.ble/master/admin/ble.png",
+		"extIcon": "https://raw.githubusercontent.com/SimonFischer04/ioBroker.ble/master/admin/ble2.png",
 		"keywords": ["bluetooth", "BLE", "beacon"],
-		"readme": "https://github.com/AlCalzone/ioBroker.ble/blob/master/README.md",
+		"readme": "https://github.com/SimonFischer04/ioBroker.ble/blob/master/README.md",
 		"loglevel": "info",
 		"type": "hardware",
 		"messagebox": true,

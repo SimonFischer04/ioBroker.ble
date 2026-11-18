@@ -1,5 +1,6 @@
 // @ts-check
 
+const assert = require("node:assert/strict");
 const path = require("path");
 const { tests } = require("@iobroker/testing");
 const adapterDir = path.join(__dirname, "..");
@@ -13,25 +14,22 @@ tests.integration(adapterDir, {
 	defineAdditionalTests({ it, suite }) {
 		const ENV = { TESTING: "true" };
 
-		suite("Test sendTo", (getHarness) => {
-			it("Should work", function () {
+		suite("Renamed adapter namespace", (getHarness) => {
+			it("creates ble2 objects and responds to ble2.0 messages", async function () {
 				this.timeout(60000);
-				return new Promise((resolve) => {
-					const harness = getHarness();
-					harness.startAdapterAndWait(false, ENV).then(() => {
-						setTimeout(() => {
-							harness.sendTo(
-								"ble.0",
-								"test",
-								"message",
-								(resp) => {
-									console.dir(resp);
-									resolve();
-								},
-							);
-						}, 2500);
-					});
+				const harness = getHarness();
+				await harness.startAdapterAndWait(false, ENV);
+				assert.equal(harness.adapterName, "ble2");
+				// The controller marks the instance alive before ready() finishes.
+				await new Promise((resolve) => setTimeout(resolve, 2500));
+				const options = await harness.objects.getObjectAsync(
+					"ble2.0.options.allowNewDevices",
+				);
+				assert.equal(options?._id, "ble2.0.options.allowNewDevices");
+				const response = await new Promise((resolve) => {
+					harness.sendTo("ble2.0", "test", "message", resolve);
 				});
+				assert.deepEqual(response, { error: "Unknown command!" });
 			});
 		});
 	},

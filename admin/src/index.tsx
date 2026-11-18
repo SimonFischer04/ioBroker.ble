@@ -220,7 +220,7 @@ const translations: Translations = {
 
 const Root: React.FC = () => {
 	return (
-		<SettingsApp name="ble" translations={translations}>
+		<SettingsApp name="ble2" translations={translations}>
 			<SettingsPageContent />
 		</SettingsApp>
 	);

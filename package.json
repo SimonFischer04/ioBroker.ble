@@ -1,10 +1,10 @@
 {
-  "name": "iobroker.ble",
+  "name": "iobroker.ble2",
   "version": "0.14.1",
   "description": "ioBroker adapter to monitor Bluetooth Low Energy (BLE) beacons",
   "author": {
-    "name": "AlCalzone",
-    "email": "d.griesel@gmx.net"
+    "name": "SimonFischer04",
+    "url": "https://github.com/SimonFischer04"
   },
   "main": "build/main.js",
   "files": [
@@ -17,9 +17,13 @@
     "io-package.json"
   ],
   "contributors": [
+    {
+      "name": "AlCalzone",
+      "email": "d.griesel@gmx.net"
+    },
     "zuvielx9 (https://github.com/zuvielx9)"
   ],
-  "homepage": "https://github.com/AlCalzone/ioBroker.ble",
+  "homepage": "https://github.com/SimonFischer04/ioBroker.ble",
   "license": "MIT",
   "keywords": [
     "ioBroker",
@@ -100,10 +104,10 @@
     "prepublishOnly": "npm run test:package",
     "translate": "translate-adapter translate",
     "release": "release-script",
-    "build:server": "esbuild src/scanProcess.ts --bundle --main-fields=main --outfile=bin/blerp.js --platform=node --format=cjs --target=node14.18 --external:@abandonware/noble"
+    "build:server": "esbuild src/scanProcess.ts --bundle --main-fields=main --outfile=bin/blerp.js --platform=node --format=cjs --target=node14.18 --external:@stoprocent/noble"
   },
   "bugs": {
-    "url": "https://github.com/AlCalzone/ioBroker.ble/issues"
+    "url": "https://github.com/SimonFischer04/ioBroker.ble/issues"
   },
   "nyc": {
     "all": true,

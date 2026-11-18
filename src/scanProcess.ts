@@ -13,9 +13,9 @@ import yargs = require("yargs");
 
 /** Define command line arguments */
 const argv = yargs
-	.env("IOB_BLE")
+	.env("IOB_BLE2")
 	.strict()
-	.usage("ioBroker.ble scanner process\n\nUsage: $0 [options]")
+	.usage("ioBroker.ble2 scanner process\n\nUsage: $0 [options]")
 	.options({
 		hciDevice: {
 			alias: "-d",
