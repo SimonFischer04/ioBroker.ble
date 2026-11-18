@@ -27,8 +27,10 @@ let services: string[] = [];
 let allowNewDevices = false;
 let resetAllowNewDevicesTimeout: NodeJS.Timeout | undefined;
 
-function autoResetAllowNewDevices() {
-	if (resetAllowNewDevicesTimeout) clearTimeout(resetAllowNewDevicesTimeout);
+function autoResetAllowNewDevices(): void {
+	if (resetAllowNewDevicesTimeout) {
+		clearTimeout(resetAllowNewDevicesTimeout);
+	}
 
 	// After 5 minutes, reset it to false
 	resetAllowNewDevicesTimeout = setTimeout(() => {
@@ -74,9 +76,7 @@ const adapter = utils.adapter({
 		_.adapter.log.info(
 			`loaded plugins: ${plugins.map((p) => p.name).join(", ")}`,
 		);
-		const enabledPluginNames: string[] = (
-			(adapter.config.plugins as string) || ""
-		)
+		const enabledPluginNames: string[] = (adapter.config.plugins || "")
 			.split(",")
 			.map((p: string) => p.trim().toLowerCase())
 			.concat("_default");
@@ -92,7 +92,7 @@ const adapter = utils.adapter({
 			services = [];
 			_.adapter.log.info(`monitoring all services`);
 		} else {
-			services = (adapter.config.services as string)
+			services = adapter.config.services
 				.split(",") // get manually defined services
 				.concat(...enabledPlugins.map((p) => p.advertisedServices)) // concat with plugin-defined ones
 				.reduce((acc, s) => acc.concat(s), [] as string[]) // flatten the arrays
@@ -100,7 +100,9 @@ const adapter = utils.adapter({
 				.filter((s) => s !== "")
 				.reduce((acc: any[], s) => {
 					// filter out duplicates
-					if (acc.indexOf(s) === -1) acc.push(s);
+					if (acc.indexOf(s) === -1) {
+						acc.push(s);
+					}
 					return acc;
 				}, []);
 			_.adapter.log.info(`monitored services: ${services.join(", ")}`);
@@ -135,13 +137,15 @@ const adapter = utils.adapter({
 	unload: (callback) => {
 		try {
 			scanProcess?.kill();
-		} catch {}
+		} catch {
+			// Shutdown must continue even when the scanner has already exited.
+		}
 		callback();
 	},
 
 	// is called if a subscribed object changes
 	objectChange: (id, obj) => {
-		if (!!obj) {
+		if (obj) {
 			// it has just been changed, so update the cached object
 			_.objectCache.updateObject(obj);
 		} else {
@@ -181,11 +185,14 @@ const adapter = utils.adapter({
 		}
 	},
 
+	// Keep the adapter callback promise-based even when no command awaits work.
+	// eslint-disable-next-line @typescript-eslint/require-await
 	message: async (obj) => {
 		// responds to the adapter that sent the original message
-		function respond(response: any) {
-			if (obj.callback)
+		function respond(response: any): void {
+			if (obj.callback) {
 				adapter.sendTo(obj.from, obj.command, response, obj.callback);
+			}
 		}
 		// some predefined responses so we only have to define them once
 		const predefinedResponses = {
@@ -193,7 +200,7 @@ const adapter = utils.adapter({
 			OK: { error: null, result: "ok" },
 			ERROR_UNKNOWN_COMMAND: { error: "Unknown command!" },
 			MISSING_PARAMETER: (paramName: string) => {
-				return { error: 'missing parameter "' + paramName + '"!' };
+				return { error: `missing parameter "${paramName}"!` };
 			},
 			COMMAND_RUNNING: { error: "command running" },
 		};
@@ -222,12 +229,14 @@ const adapter = utils.adapter({
 						}
 						// parse index and bus type
 						const ports: { index: number; bus: string }[] = [];
-						const regex = /^hci(\d+)\:.+Bus\:\s(\w+)$/gm;
+						const regex = /^hci(\d+):.+Bus:\s(\w+)$/gm;
 						let result: RegExpExecArray | null;
 
 						while (true) {
 							result = regex.exec(stdout);
-							if (!(result && result.length)) break;
+							if (!(result && result.length)) {
+								break;
+							}
 							const port = { index: +result[1], bus: result[2] };
 							ports.push(port);
 						}
@@ -242,7 +251,7 @@ const adapter = utils.adapter({
 	},
 });
 
-function startScanProcess() {
+function startScanProcess(): void {
 	const args: string[] = ["-s", ...services];
 	const manufacturerIds = [
 		...new Set(enabledPlugins.flatMap((p) => p.manufacturerIds ?? [])),
@@ -271,7 +280,7 @@ function startScanProcess() {
 	scanProcess.on("message", getMessageReviver(handleMessage));
 }
 
-function connectToBLEServer() {
+function connectToBLEServer(): void {
 	socket = new Socket();
 
 	const reviver = getMessageReviver(handleMessage);
@@ -299,7 +308,7 @@ function connectToBLEServer() {
 					reviver(msg);
 				} catch (e) {
 					console.error(e);
-					console.error("data was: " + line);
+					console.error(`data was: ${line}`);
 				}
 			}
 		});
@@ -313,7 +322,7 @@ function connectToBLEServer() {
 	});
 }
 
-function handleMessage(message: ScanMessage) {
+function handleMessage(message: ScanMessage): void {
 	switch (message.type) {
 		case "connected":
 			adapter.setState("info.connection", true, true);
@@ -338,7 +347,9 @@ function handleMessage(message: ScanMessage) {
 }
 
 function fixServiceName(name: string | null | undefined): string {
-	if (name == null) return "";
+	if (name == null) {
+		return "";
+	}
 	name = name.trim();
 	// No whitespace
 	for (const char of ["\r", "\n", "\t", " "]) {
@@ -350,8 +361,10 @@ function fixServiceName(name: string | null | undefined): string {
 	return name.toLowerCase();
 }
 
-async function onDiscover(peripheral: PeripheralInfo) {
-	if (peripheral == null) return;
+async function onDiscover(peripheral: PeripheralInfo): Promise<void> {
+	if (peripheral == null) {
+		return;
+	}
 
 	let serviceDataIsNotEmpty = false;
 	let manufacturerDataIsNotEmpty = false;
@@ -424,7 +437,9 @@ async function onDiscover(peripheral: PeripheralInfo) {
 	// Test if we may record this device
 	if (!allowNewDevices) {
 		// We may not. First test if we already ignored this device
-		if (ignoredNewDeviceIDs.has(deviceId)) return;
+		if (ignoredNewDeviceIDs.has(deviceId)) {
+			return;
+		}
 		// If not, check if the RSSI object exists, as that exists for every one
 		if (
 			!(await _.objectCache.objectExists(
@@ -468,7 +483,9 @@ async function onDiscover(peripheral: PeripheralInfo) {
 	const values = plugin.getValues(context);
 
 	// We can't do anything without objects
-	if (objects == null) return;
+	if (objects == null) {
+		return;
+	}
 
 	// Ensure the device object exists
 	await extendDevice(deviceId, peripheral, objects.device);
@@ -476,13 +493,13 @@ async function onDiscover(peripheral: PeripheralInfo) {
 	if (objects.channels != null && objects.channels.length > 0) {
 		await Promise.all(
 			objects.channels.map((c) =>
-				extendChannel(deviceId + "." + c.id, c),
+				extendChannel(`${deviceId}.${c.id}`, c),
 			),
 		);
 	}
 	// Ensure the state objects exist. These might change in every advertisement frame
 	await Promise.all(
-		objects.states.map((s) => extendState(deviceId + "." + s.id, s)),
+		objects.states.map((s) => extendState(`${deviceId}.${s.id}`, s)),
 	);
 
 	// Now fill the states with values
@@ -493,7 +510,7 @@ async function onDiscover(peripheral: PeripheralInfo) {
 		// eslint-disable-next-line prefer-const
 		for (let [stateId, value] of entries(values)) {
 			// Fix special chars
-			stateId = stateId.replace(/[\(\)]+/g, "").replace(" ", "_");
+			stateId = stateId.replace(/[()]+/g, "").replace(" ", "_");
 			// set the value if there's an object for the state
 			const iobStateId = `${adapter.namespace}.${deviceId}.${stateId}`;
 			if ((await _.objectCache.getObject(iobStateId)) != null) {
@@ -514,7 +531,7 @@ async function onDiscover(peripheral: PeripheralInfo) {
 	}
 }
 
-function handleScanProcessError(err: Error) {
+function handleScanProcessError(err: Error): void {
 	if (
 		/compatible USB Bluetooth/.test(err.message) ||
 		/LIBUSB_ERROR_NOT_SUPPORTED/.test(err.message)

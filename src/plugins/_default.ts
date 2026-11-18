@@ -12,10 +12,9 @@ function parseData(raw: Buffer): string | number {
 	if (raw.length === 1) {
 		// single byte
 		return raw[0];
-	} else {
-		// Output hex value
-		return raw.toString("hex");
 	}
+	// Output hex value
+	return raw.toString("hex");
 }
 
 const plugin: Plugin = {
@@ -58,7 +57,7 @@ const plugin: Plugin = {
 					id: stateId,
 					common: {
 						role: "value",
-						name: "Advertised service " + uuid, // TODO: create readable names
+						name: `Advertised service ${uuid}`, // TODO: create readable names
 						desc: "",
 						type: "mixed",
 						read: true,

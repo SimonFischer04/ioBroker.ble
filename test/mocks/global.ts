@@ -24,9 +24,8 @@ export function createGlobalMock(
 				);
 				if (role) {
 					return objFilter(objects, (o) => o.common.role === role);
-				} else {
-					return objects;
 				}
+				return objects;
 			},
 			$: adapter.getForeignObjectAsync,
 		},

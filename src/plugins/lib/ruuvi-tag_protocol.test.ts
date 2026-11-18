@@ -1,3 +1,4 @@
+import type RuuviTagModule = require("../ruuvi-tag");
 /* eslint-disable @typescript-eslint/no-namespace */
 import type { PeripheralInfo } from "../../lib/scanProcessInterface";
 import { expect } from "chai";
@@ -14,7 +15,7 @@ namespace mocks {
 	// export const customSubscriptions = createCustomSubscriptionsMock();
 }
 
-const plugin = proxyquire<typeof import("../ruuvi-tag")>("../ruuvi-tag", {
+const plugin = proxyquire<typeof RuuviTagModule>("../ruuvi-tag", {
 	"../lib/global": mocks.global,
 });
 

@@ -1,5 +1,5 @@
 /** noble-Treiber-Instanz */
-import type { Peripheral } from "@stoprocent/noble";
+import type * as Noble from "@stoprocent/noble";
 import { createServer, type AddressInfo, type Server, type Socket } from "net";
 import { pick } from "./lib/misc";
 import { matchesScanFilter } from "./lib/scan-filter";
@@ -50,7 +50,7 @@ const argv = yargs
 	})
 	.parseSync();
 
-let noble: typeof import("@stoprocent/noble");
+let noble: typeof Noble;
 let server: Server | undefined;
 const clients: Set<Socket> = new Set();
 
@@ -62,21 +62,26 @@ function sendAsync(
 	if (process.send) {
 		return new Promise((resolve, reject) => {
 			process.send!(message, sendHandle, undefined, (err) => {
-				if (err && !swallowErrors) reject(err);
-				else resolve();
+				if (err && !swallowErrors) {
+					reject(err);
+				} else {
+					resolve();
+				}
 			});
 		});
-	} else {
-		const promises = [...clients].map((client) => {
-			return new Promise<void>((resolve, reject) => {
-				client.write(JSON.stringify(message) + "\n", (err) => {
-					if (err && !swallowErrors) reject(err);
-					else resolve();
-				});
-			});
-		});
-		return Promise.all(promises).then(() => undefined);
 	}
+	const promises = [...clients].map((client) => {
+		return new Promise<void>((resolve, reject) => {
+			client.write(`${JSON.stringify(message)}\n`, (err) => {
+				if (err && !swallowErrors) {
+					reject(err);
+				} else {
+					resolve();
+				}
+			});
+		});
+	});
+	return Promise.all(promises).then(() => undefined);
 }
 
 // @ts-expect-error We need this to serialize and deserialize Error objects
@@ -115,7 +120,7 @@ process.on("message", (msg) => {
 	handleMessage(msg as InboundMessage);
 });
 
-function handleMessage(msg: InboundMessage) {
+function handleMessage(msg: InboundMessage): void {
 	switch (msg.type) {
 		case "startScanning":
 			startScanning();
@@ -126,7 +131,7 @@ function handleMessage(msg: InboundMessage) {
 	}
 }
 
-function serializePeripheral(peripheral: Peripheral): PeripheralInfo {
+function serializePeripheral(peripheral: Noble.Peripheral): PeripheralInfo {
 	return pick(peripheral, [
 		"id",
 		"uuid",
@@ -140,8 +145,10 @@ function serializePeripheral(peripheral: Peripheral): PeripheralInfo {
 	]);
 }
 
-function onDiscover(peripheral?: Peripheral) {
-	if (peripheral == undefined) return;
+function onDiscover(peripheral?: Noble.Peripheral): void {
+	if (peripheral == undefined) {
+		return;
+	}
 	if (!matchesScanFilter(peripheral, argv.services, argv.manufacturerIds)) {
 		return;
 	}
@@ -152,8 +159,10 @@ function onDiscover(peripheral?: Peripheral) {
 }
 
 let isScanning = false;
-async function startScanning() {
-	if (isScanning) return;
+async function startScanning(): Promise<void> {
+	if (isScanning) {
+		return;
+	}
 	await sendAsync({ type: "connected" });
 	await sendAsync({
 		type: "log",
@@ -170,8 +179,12 @@ async function startScanning() {
 	isScanning = true;
 }
 
-async function stopScanning() {
-	if (!isScanning) return;
+// Keep the scanner lifecycle API promise-based.
+// eslint-disable-next-line @typescript-eslint/require-await
+async function stopScanning(): Promise<void> {
+	if (!isScanning) {
+		return;
+	}
 	noble.removeAllListeners("discover");
 	sendAsync({
 		type: "log",
@@ -184,7 +197,9 @@ async function stopScanning() {
 
 function maybeStartServer(): Promise<void> {
 	// This is a child process, we have an IPC channel
-	if (process.send) return Promise.resolve();
+	if (process.send) {
+		return Promise.resolve();
+	}
 
 	return new Promise((resolve, reject) => {
 		// Start a TCP server, listen for connections, and forward them to the serial port
@@ -223,11 +238,12 @@ function maybeStartServer(): Promise<void> {
 	});
 }
 
-async function loadNoble() {
+async function loadNoble(): Promise<void> {
 	// load noble driver with the correct device selected
 	process.env.NOBLE_HCI_DEVICE_ID = argv.hciDevice.toString();
 	try {
-		// eslint-disable-next-line @typescript-eslint/no-var-requires
+		// Noble must load after NOBLE_HCI_DEVICE_ID is set.
+		// eslint-disable-next-line @typescript-eslint/no-require-imports
 		noble = require("@stoprocent/noble");
 		if (typeof noble.on !== "function") {
 			// The following commit broke the default exported instance of noble:
@@ -240,7 +256,9 @@ async function loadNoble() {
 	}
 }
 
-async function main() {
+// Keep the scanner lifecycle API promise-based.
+// eslint-disable-next-line @typescript-eslint/require-await
+async function main(): Promise<void> {
 	// prepare scanning for beacons
 	noble.on("stateChange", (state) => {
 		switch (state) {
@@ -254,7 +272,9 @@ async function main() {
 		console.log(`driver state is ${state}`);
 		sendAsync({ type: "driverState", driverState: state });
 	});
-	if (noble.state === "poweredOn") startScanning();
+	if (noble.state === "poweredOn") {
+		startScanning();
+	}
 	sendAsync({ type: "driverState", driverState: noble.state });
 }
 

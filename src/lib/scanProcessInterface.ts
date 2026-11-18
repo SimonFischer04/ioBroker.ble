@@ -77,9 +77,8 @@ export function getMessageReviver<T extends Record<string, any>>(
 			}
 			// eslint-disable-next-line @typescript-eslint/no-use-before-define
 			return reviveObject(value);
-		} else {
-			return value;
 		}
+		return value;
 	};
 	const reviveObject = (input: Record<string, any>): Record<string, any> => {
 		const ret: Record<string, any> = {};

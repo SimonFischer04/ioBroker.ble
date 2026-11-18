@@ -45,7 +45,7 @@ const SettingsPageContent: React.FC = React.memo(() => {
 	const handleChange = <T extends keyof ioBroker.AdapterConfig>(
 		option: T,
 		value: ioBroker.AdapterConfig[T],
-	) => {
+	): void => {
 		setSettings((s) => ({
 			...s,
 			[option]: value,
@@ -202,6 +202,7 @@ const SettingsPageContent: React.FC = React.memo(() => {
 		</div>
 	);
 });
+SettingsPageContent.displayName = "SettingsPageContent";
 
 // Load your translations
 const translations: Translations = {

@@ -10,8 +10,10 @@ function tryCatchUnsupportedHardware(err) {
 
 process.env.NOBLE_HCI_DEVICE_ID = "0";
 try {
-	const noble = require("@stoprocent/noble")({ extended: false });
+	require("@stoprocent/noble")({ extended: false });
 } catch (e) {
-	if (!tryCatchUnsupportedHardware(e)) process.exit(1);
+	if (!tryCatchUnsupportedHardware(e)) {
+		process.exit(1);
+	}
 }
 process.exit(0);

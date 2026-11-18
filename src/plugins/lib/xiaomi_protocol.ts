@@ -53,9 +53,8 @@ const valueTransforms: Partial<
 	default: (val, eventID) => {
 		if (eventID! in XiaomiEventIDs_Internal) {
 			return { [XiaomiEventIDs_Internal[eventID!].toLowerCase()]: val };
-		} else {
-			return { [`unknown (0x${eventID!.toString(16)})`]: val };
 		}
+		return { [`unknown (0x${eventID!.toString(16)})`]: val };
 	},
 	// TODO: find a nicer way to specify the bit size of temperature - this information exists in the packet!
 	Temperature: (val) => ({ temperature: toSigned(val, 16) / 10 }),
@@ -246,12 +245,16 @@ function parseNumberLE(
 	return value;
 }
 
-/** Converts an unsigned number to a signed one (e.g. 0xffff = 65535 -> -1) */
+/**
+ * Converts an unsigned number to a signed one (e.g. 0xffff = 65535 -> -1)
+ *
+ * @param unsigned Unsigned integer value
+ * @param size Number of bits in the encoded value
+ */
 function toSigned(unsigned: number, size: number): number {
 	if (unsigned >>> (size - 1) === 1) {
 		// if the first bit is 1, we have a negative number
 		return unsigned - (1 << size);
-	} else {
-		return unsigned;
 	}
+	return unsigned;
 }

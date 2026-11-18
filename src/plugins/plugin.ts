@@ -5,10 +5,14 @@ export type DeviceObjectDefinition = Partial<
 >;
 export type ChannelObjectDefinition = Partial<
 	Pick<ioBroker.ChannelObject, "common" | "native">
-> & { id: string };
+> & {
+	id: string;
+};
 export type StateObjectDefinition = Partial<
 	Pick<ioBroker.StateObject, "common" | "native">
-> & { id: string };
+> & {
+	id: string;
+};
 
 /**
  * Defines the object structure for a handled peripheral.
@@ -56,11 +60,18 @@ export function getServiceData(
 	uuid: string,
 ): Buffer | undefined {
 	for (const entry of peripheral.advertisement?.serviceData ?? []) {
-		if (entry.uuid === uuid) return entry.data;
+		if (entry.uuid === uuid) {
+			return entry.data;
+		}
 	}
 }
 
-/** Aliases an existing plugin with a new name */
+/**
+ * Aliases an existing plugin with a new name
+ *
+ * @param newName Name of the alias
+ * @param oldPlugin Plugin to reuse
+ */
 export function alias(newName: string, oldPlugin: Plugin): Plugin {
 	const { name, ...plugin } = oldPlugin;
 	return {

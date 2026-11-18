@@ -40,7 +40,7 @@ describe("bthome protocol => ", () => {
 		for (const { hex, label, value, unit } of examples) {
 			it(`decodes the specification example for 0x${hex.slice(0, 2)}`, () => {
 				const parsed = new BTHomeAdvertisement(
-					Buffer.from("40" + hex, "hex"),
+					Buffer.from(`40${hex}`, "hex"),
 				);
 				expect(parsed.multilevelSensors).to.have.length(1);
 				expect(parsed.multilevelSensors[0].label).to.equal(label);
@@ -54,7 +54,7 @@ describe("bthome protocol => ", () => {
 				expect(
 					() =>
 						new BTHomeAdvertisement(
-							Buffer.from("40" + hex.slice(0, -2), "hex"),
+							Buffer.from(`40${hex.slice(0, -2)}`, "hex"),
 						),
 				).to.throw();
 			});
@@ -70,7 +70,7 @@ describe("bthome protocol => ", () => {
 		] as const) {
 			it(`preserves the signed counter value ${value}`, () => {
 				expect(
-					new BTHomeAdvertisement(Buffer.from("40" + hex, "hex"))
+					new BTHomeAdvertisement(Buffer.from(`40${hex}`, "hex"))
 						.multilevelSensors[0].value,
 				).to.equal(value);
 			});

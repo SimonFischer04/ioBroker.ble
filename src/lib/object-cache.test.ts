@@ -1,3 +1,4 @@
+import type * as ObjectCacheModule from "./object-cache";
 import { extend } from "alcalzone-shared/objects";
 import { expect } from "chai";
 import * as proxyquireModule from "proxyquire";
@@ -16,13 +17,10 @@ namespace mocks {
 	export const customSubscriptions = createCustomSubscriptionsMock();
 }
 
-const { ObjectCache } = proxyquire<typeof import("./object-cache")>(
-	"./object-cache",
-	{
-		"./custom-subscriptions": mocks.customSubscriptions,
-		"../lib/global": mocks.global,
-	},
-);
+const { ObjectCache } = proxyquire<typeof ObjectCacheModule>("./object-cache", {
+	"./custom-subscriptions": mocks.customSubscriptions,
+	"../lib/global": mocks.global,
+});
 
 describe("lib/object-cache", () => {
 	afterEach(() => {
