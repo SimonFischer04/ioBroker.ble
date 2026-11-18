@@ -127,6 +127,7 @@
 		},
 		"tier": 2,
 		"main": "build/main.js",
+		"nogit": true,
 		"mode": "daemon",
 		"icon": "ble.png",
 		"enabled": true,
