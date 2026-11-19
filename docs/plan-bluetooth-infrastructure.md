@@ -1,6 +1,6 @@
 # Plan: zentrale Bluetooth-Infrastruktur in `ioBroker.ble`
 
-Status: Phase 0, 1a und 1b umgesetzt, Phase 2 spezifiziert, pvvx-Protokoll beschrieben · Stand 2026-11-17
+Status: Phase 0, 1a und 1b umgesetzt, Phase 2 und 3 spezifiziert · Stand 2026-11-19
 
 ## Wie dieses Dokument zu lesen ist
 
@@ -12,13 +12,14 @@ Dieses Dokument beschreibt **Architektur und Entscheidungen**. Es ist keine Arbe
 | `docs/plan-bluetooth-infrastructure.md` (dieses) | Warum es so gebaut wird: Zielbild, Entscheidungen E1–E8, Phasen, Risiken |
 | `docs/spec-phase-2-gatt.md` | Verbindliche Umsetzung von Phase 2, für beide Repos |
 | `docs/pvvx-protocol.md` | Protokoll der pvvx-Firmware für Zeit, Version und Firmware-Update, mit Testvektoren. Grundlage für Phase 3 und 4 |
+| `docs/spec-phase-3-pvvx-time.md` | Verbindliche Umsetzung von Phase 3 |
 
 | Phase | Stand | Spezifikation |
 |---|---|---|
 | 0, 1a | umgesetzt (dieses Repo) | – |
 | 1b | umgesetzt (`DrozmotiX/ioBroker.esphome`, Branch `ccr-ble-gateway-forwarding`) | – |
 | 2 | offen | `docs/spec-phase-2-gatt.md` |
-| 3 | offen. Das Protokoll steht in `docs/pvvx-protocol.md`. Hängt nur von Phase 2 ab. | fehlt |
+| 3 | offen, kann nach Phase 2 beginnen | `docs/spec-phase-3-pvvx-time.md` |
 | 4 | offen. Das Protokoll steht in `docs/pvvx-protocol.md`. Hängt von Phase 2 ab und braucht zusätzlich `gatt:writeSequence`. | fehlt |
 | 5, 6 | offen | fehlt |
 
@@ -255,6 +256,8 @@ Das Protokoll steht in `docs/pvvx-protocol.md`, abgeleitet aus Firmware, Web-Fla
 
 ### 5.1 Zeitsynchronisierung
 
+> Die Umsetzung legt `docs/spec-phase-3-pvvx-time.md` fest und weicht hier ab: Die States liegen unter `<mac>.pvvx.*` (`syncTime`, `lastTimeSync`, `timeDeviation`, `firmwareVersion`, `hardwareId`, `lastError`). Es gibt keinen Schwellwert für die Abweichung, die Uhr wird bei jedem Sync gestellt. Die Zeitumstellung wird jede Minute über den Offset erkannt, ohne eigenen Timer auf den Übergang. Die Geräte werden nacheinander gestellt, nicht parallel.
+
 States pro Gerät:
 - `time.sync` (Button)
 - `time.lastSync` (ts)
@@ -326,7 +329,7 @@ Jede Phase ist für sich releasefähig.
 | **1a: Gateway-Schnittstelle in `ble` (Empfang)** | `gateway-protocol.ts`, Befehl `gateway:advertisements`, Transport `remote-gateway`, AD-Parser (mit Unit-Tests gegen echte Pakete), Registry mit Gateway pro Gerät, Dedupe, Offline-Erkennung. Dazu der Hub-Betrieb ohne lokalen Stick (E8). | Ein Testskript schickt aufgezeichnete Pakete per `sendTo` an `ble.0`. Die Sensoren landen mit korrekter MAC in den bestehenden Objekten, ohne doppelte Dekodierung. Das funktioniert auch auf einem Host ohne Bluetooth-Hardware und ohne `noble`. | L |
 | **1b: `esphome` liefert Pakete** (PR in `ioBroker.esphome`) | Spike in `@2colors/esphome-native-api` (E7), Advertisement-Abo am ESP, sobald die Weiterleitung konfiguriert ist, Bündelung, Konfigurationsoption. | pvvx-/BTHome-Sensoren aus drei Stockwerken erscheinen in `ble`. Ohne konfigurierte Weiterleitung verhält sich `esphome` wie bisher. | S–M |
 | **2: GATT-Kern** | Spezifikation: `docs/spec-phase-2-gatt.md`. `ble`: `gateway:announce`, `connections/` mit Link, Session und Connection Manager (ein Auftrag pro Gerät, Gateway-Auswahl, Timeouts, nächstes Gateway bei Fehler), drei Einzelbefehle über `sendTo`. `esphome`: `gateway:announce` mit freien Plätzen, die `gatt:*`-Befehle, Meldung von Verbindungsenden und Notifications, Aufräumen, wenn `ble` stoppt oder neu startet. | Eine Characteristic eines Thermometers wird über einen entfernten Proxy gelesen und geschrieben. Zwei Anfragen an dasselbe Gerät laufen nacheinander. Stirbt `ble`, baut `esphome` die Verbindungen ab. | L |
-| **3: pvvx-Zeitsync** | `drivers/pvvx` mit Zeit lesen und setzen, Drift, Auslösern und DST-Erkennung. | Eine simulierte DST-Umstellung (Offset gemockt) synchronisiert alle Geräte gestaffelt, und `time.drift` ist danach ≈ 0. | M |
+| **3: pvvx-Zeitsync** | Spezifikation: `docs/spec-phase-3-pvvx-time.md`. `drivers/pvvx`: Geräte aus einer Liste in den Einstellungen, Zeit lesen und setzen, Version und Hardware-ID lesen, Auslöser Start, Intervall, Zeitumstellung und Knopf, Wiederholungen nach Fehlern. | Eine simulierte Zeitumstellung (Offset gemockt) stellt alle Geräte nacheinander neu, und `pvvx.timeDeviation` zeigt die Abweichung vor dem Stellen. | M |
 | **4: pvvx-OTA** | `esphome`: `gatt:writeSequence`. `ble`: Firmware-Verwaltung, Vorab-Prüfungen, serieller Rollout, Fortschritt. | Ein Testgerät wird über einen Proxy erfolgreich geflasht, und ein absichtlicher Abbruch lässt das Gerät funktionsfähig. | L |
 | **5: Externe API** | Vollständige `sendTo`-API (Abschnitt 4) mit Leases, Advertisement-Abos und Doku. | Ein Beispieladapter oder -skript liest per API ein Characteristic und erhält Notifications. | M |
 | **6 (optional): Lokales GATT** | BlueZ über D-Bus oder noble als Connect-fähiger Transport. | Der lokale Dongle kann als Gateway für Sessions dienen. | M–L |
@@ -423,5 +426,5 @@ Noch nicht getestet ist der Weg mit einem echten ESP32 und mit beiden Adaptern i
 2. Den Branch in `ioBroker.esphome` als PR gegen `v2` stellen und mit den Maintainern abstimmen.
 3. Phase 2 nach `docs/spec-phase-2-gatt.md` umsetzen.
 4. Mit Phase 2 und einem echten Thermometer die offenen Punkte aus `docs/pvvx-protocol.md`, Abschnitt 9, klären. Vor allem: welche Schreibart über einen ESPHome-Proxy funktioniert.
-5. Die Spezifikation für Phase 3 (Zeitsync) schreiben. Sie braucht nur Phase 2.
+5. Phase 3 nach `docs/spec-phase-3-pvvx-time.md` umsetzen, nach Phase 2.
 6. Die Spezifikation für Phase 4 (Firmware-Update) schreiben, inklusive `gatt:writeSequence`, erst nach Punkt 4.

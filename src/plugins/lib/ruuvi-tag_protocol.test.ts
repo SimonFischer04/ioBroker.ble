@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-namespace */
-import type { Peripheral } from "@stoprocent/noble";
 import * as proxyquireModule from "proxyquire";
 import { createGlobalMock } from "../../../test/mocks/global";
+import type { PeripheralInfo } from "../../lib/advertisement";
 
 // import mocks
 const proxyquire = proxyquireModule.noPreserveCache();
@@ -38,7 +38,7 @@ describe("ruuvi-tag protocol (service data) => ", () => {
 		},
 		rssi: -91,
 		state: "disconnected",
-	} as Peripheral;
+	} as unknown as PeripheralInfo;
 	it("should be handling the packet", () => {
 		plugin.isHandling(peripheral).should.be.true;
 		// also for repeated tests
@@ -63,7 +63,7 @@ describe("ruuvi-tag protocol (manufacturer data) => ", () => {
 		},
 		rssi: -91,
 		state: "disconnected",
-	} as any as Peripheral;
+	} as any as PeripheralInfo;
 	it("should be handling the packet", () => {
 		plugin.isHandling(peripheral).should.be.true;
 		// also for repeated tests

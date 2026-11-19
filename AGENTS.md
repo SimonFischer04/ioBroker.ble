@@ -17,6 +17,7 @@ That work is planned in `docs/`:
 | `docs/plan-bluetooth-infrastructure.md` | Architecture, decisions (E1 – E8) and the phases. German. Read sections 2 and 7 first. |
 | `docs/spec-phase-2-gatt.md`             | Implementation specification of phase 2 (GATT connections). German. Follow it literally. |
 | `docs/pvvx-protocol.md`                 | GATT protocol of the pvvx thermometer firmware (time, version, firmware update), with test vectors. German. |
+| `docs/spec-phase-3-pvvx-time.md`        | Implementation specification of phase 3 (time sync of pvvx thermometers). German. Follow it literally. |
 
 **If you implement a phase, the specification of that phase is binding.** Where it does not answer a question, stop
 and ask instead of guessing. Do not implement a phase that has no specification.
@@ -95,8 +96,9 @@ All of them have to pass before a commit. Known pitfalls:
 - **The integration tests run `build/`, not `src/`.** Run `npm run build` first, otherwise you test the old code.
 - The test installation in `/tmp/test-iobroker.ble` is reused. `test/integration.js` deletes its npm lockfiles so the
   current build gets installed. If the tests still seem to run old code, delete that directory.
-- `mocha src/**/*.test.ts` is expanded by the shell: it only finds tests exactly one directory below `src/`
-  (`src/lib/x.test.ts`). Put new unit tests next to the code, one level deep, as the existing ones.
+- The test scripts pass the pattern to mocha in quotes (`mocha "src/**/*.test.ts"`), so mocha finds tests at any
+  depth. Without the quotes the shell expands `**` like `*` and tests two directories below `src/` silently do not run
+  (that hid 15 decoder tests until November 2026). Keep the quotes.
 
 ## Tests
 
