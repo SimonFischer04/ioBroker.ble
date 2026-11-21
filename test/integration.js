@@ -26,6 +26,24 @@ tests.integration(adapterDir, {
 					"ble2.0.options.allowNewDevices",
 				);
 				assert.equal(options?._id, "ble2.0.options.allowNewDevices");
+				// JSONConfig's live switch sends unacknowledged state commands.
+				for (const val of [true, false]) {
+					await harness.states.setStateAsync(options._id, {
+						val,
+						ack: false,
+					});
+					const deadline = Date.now() + 5000;
+					let state;
+					do {
+						state = await harness.states.getStateAsync(options._id);
+						if (state?.ack && state.val === val) {
+							break;
+						}
+						await new Promise((resolve) => setTimeout(resolve, 50));
+					} while (Date.now() < deadline);
+					assert.equal(state?.val, val);
+					assert.equal(state?.ack, true);
+				}
 				const response = await new Promise((resolve) => {
 					harness.sendTo("ble2.0", "test", "message", resolve);
 				});

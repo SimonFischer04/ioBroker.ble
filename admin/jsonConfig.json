@@ -1,0 +1,102 @@
+{
+    "type": "panel",
+    "i18n": true,
+    "items": {
+        "server": {
+            "type": "text",
+            "label": "Use remote server:",
+            "placeholder": "address:port",
+            "help": "when configured, the local bluetooth adapter is not used",
+            "trim": false,
+            "xs": 12,
+            "sm": 6,
+            "md": 4,
+            "lg": 4,
+            "xl": 4
+        },
+        "hciDevice": {
+            "type": "number",
+            "label": "Select device:",
+            "help": "On linux this can be determined with `hciconfig`:",
+            "min": 0,
+            "step": 1,
+            "xs": 12,
+            "sm": 6,
+            "md": 4,
+            "lg": 4,
+            "xl": 4
+        },
+        "rssiThrottle": {
+            "type": "number",
+            "label": "RSSI update interval [ms]:",
+            "help": "Too frequent updates can slow down the admin.",
+            "min": 0,
+            "max": 10000,
+            "step": 1,
+            "xs": 12,
+            "sm": 6,
+            "md": 4,
+            "lg": 4,
+            "xl": 4
+        },
+        "services": {
+            "type": "text",
+            "label": "Monitored services, * for all services:",
+            "help": "Service characteristics as HEX codes or UUID, comma separated.",
+            "minRows": 3,
+            "trim": false,
+            "xs": 12,
+            "sm": 6,
+            "md": 6,
+            "lg": 6,
+            "xl": 6
+        },
+        "plugins": {
+            "type": "text",
+            "label": "Active plugins:",
+            "help": "Plugin names, comma separated.",
+            "minRows": 3,
+            "trim": false,
+            "xs": 12,
+            "sm": 6,
+            "md": 6,
+            "lg": 6,
+            "xl": 6
+        },
+        "allowEmptyDevices": {
+            "type": "checkbox",
+            "label": "Allow creation of devices without advertised data",
+            "xs": 12,
+            "sm": 6,
+            "md": 6,
+            "lg": 6,
+            "xl": 6
+        },
+        "_discovery": {
+            "type": "panel",
+            "xs": 12,
+            "sm": 6,
+            "md": 6,
+            "lg": 6,
+            "xl": 6,
+            "items": {
+                "_allowNewDevices": {
+                    "type": "state",
+                    "label": "Accept new devices",
+                    "oid": "options.allowNewDevices",
+                    "control": "switch",
+                    "foreign": false,
+                    "xs": 12
+                },
+                "_discoveryHelp": {
+                    "type": "staticText",
+                    "text": "This will be automatically disabled after 5 minutes.",
+                    "xs": 12,
+                    "style": {
+                        "fontSize": 12
+                    }
+                }
+            }
+        }
+    }
+}
