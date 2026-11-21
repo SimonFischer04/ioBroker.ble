@@ -9,6 +9,7 @@
   },
   "main": "build/main.js",
   "files": [
+    "CHANGELOG_OLD.md",
     "admin/jsonConfig.json",
     "admin/i18n",
     "admin/*.png",
