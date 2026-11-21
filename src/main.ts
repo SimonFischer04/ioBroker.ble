@@ -1,7 +1,7 @@
 import * as utils from "@iobroker/adapter-core";
 import { entries } from "alcalzone-shared/objects";
-import { exec, fork, type ChildProcess } from "child_process";
-import * as path from "path";
+import { exec, fork, type ChildProcess } from "node:child_process";
+import * as path from "node:path";
 import { Global as _ } from "./lib/global";
 import {
 	extendChannel,
@@ -16,7 +16,7 @@ import {
 	type ScanMessage,
 } from "./lib/scanProcessInterface";
 // Load all registered plugins
-import { Socket } from "net";
+import { Socket } from "node:net";
 import plugins from "./plugins";
 import type { Plugin } from "./plugins/plugin";
 
@@ -25,15 +25,15 @@ let services: string[] = [];
 
 /** Whether new devices may be recorded */
 let allowNewDevices = false;
-let resetAllowNewDevicesTimeout: NodeJS.Timeout | undefined;
+let resetAllowNewDevicesTimeout: ioBroker.Timeout | undefined;
 
 function autoResetAllowNewDevices(): void {
 	if (resetAllowNewDevicesTimeout) {
-		clearTimeout(resetAllowNewDevicesTimeout);
+		_.adapter.clearTimeout(resetAllowNewDevicesTimeout);
 	}
 
 	// After 5 minutes, reset it to false
-	resetAllowNewDevicesTimeout = setTimeout(() => {
+	resetAllowNewDevicesTimeout = _.adapter.setTimeout(() => {
 		allowNewDevices = false;
 		_.adapter.setState("options.allowNewDevices", false, true);
 		resetAllowNewDevicesTimeout = undefined;
@@ -136,6 +136,7 @@ const adapter = utils.adapter({
 	// is called when adapter shuts down - callback has to be called under any circumstances!
 	unload: (callback) => {
 		try {
+			_.objectCache?.dispose();
 			scanProcess?.kill();
 		} catch {
 			// Shutdown must continue even when the scanner has already exited.

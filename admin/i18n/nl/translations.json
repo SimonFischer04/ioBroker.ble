@@ -11,5 +11,6 @@
     "This will be automatically disabled after 5 minutes.": "Dit wordt automatisch uitgeschakeld na 5 minuten.",
     "Too frequent updates can slow down the admin.": "Te frequente updates kunnen vertragen de admin.",
     "Use remote server:": "Externe server gebruiken:",
-    "when configured, the local bluetooth adapter is not used": "Indien ingesteld, wordt de lokale Bluetooth-adapter niet gebruikt"
+    "when configured, the local bluetooth adapter is not used": "Indien ingesteld, wordt de lokale Bluetooth-adapter niet gebruikt",
+    "address:port": "adres:poort"
 }

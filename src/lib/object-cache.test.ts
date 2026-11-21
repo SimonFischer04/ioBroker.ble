@@ -251,6 +251,19 @@ describe("lib/object-cache", () => {
 			expired!.should.not.deep.equal(original);
 		});
 
+		it("cancels a pending expiration when disposed", async () => {
+			const cache = new ObjectCache(DURATION);
+			mocks.database.publishObject({
+				_id: "pending",
+				type: "state",
+				common: { role: "value" },
+			});
+			await cache.getObject("pending");
+			clock.countTimers().should.equal(1);
+			cache.dispose();
+			clock.countTimers().should.equal(0);
+		});
+
 		it.skip("test multiple expirations in sequence", () => {
 			// TODO
 		});

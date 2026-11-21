@@ -1,14 +1,14 @@
 // @ts-check
 
 const assert = require("node:assert/strict");
-const path = require("path");
+const path = require("node:path");
 const { tests } = require("@iobroker/testing");
 const adapterDir = path.join(__dirname, "..");
 
 // Run tests
 tests.integration(adapterDir, {
-	// Use a reproducible controller version instead of a moving development build.
-	controllerVersion: "7.2.5",
+	// Exercise the declared minimum with a reproducible controller version.
+	controllerVersion: "7.2.2",
 	allowedExitCodes: [11],
 
 	defineAdditionalTests({ it, suite }) {

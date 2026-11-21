@@ -11,5 +11,6 @@
     "This will be automatically disabled after 5 minutes.": "Це буде автоматично вимкнено через 5 хвилин.",
     "Too frequent updates can slow down the admin.": "Занадто часті оновлення можуть уповільнити admin.",
     "Use remote server:": "Використовувати віддалений сервер:",
-    "when configured, the local bluetooth adapter is not used": "Якщо налаштовано, локальний адаптер Bluetooth не використовується"
+    "when configured, the local bluetooth adapter is not used": "Якщо налаштовано, локальний адаптер Bluetooth не використовується",
+    "address:port": "адреса:порт"
 }

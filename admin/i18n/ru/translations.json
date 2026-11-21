@@ -11,5 +11,6 @@
     "This will be automatically disabled after 5 minutes.": "Это будет автоматически отключено через 5 минут.",
     "Too frequent updates can slow down the admin.": "Слишком частые обновления могут замедлить админ.",
     "Use remote server:": "Использовать удалённый сервер:",
-    "when configured, the local bluetooth adapter is not used": "При настройке удалённого сервера локальный Bluetooth-адаптер не используется"
+    "when configured, the local bluetooth adapter is not used": "При настройке удалённого сервера локальный Bluetooth-адаптер не используется",
+    "address:port": "адрес:порт"
 }

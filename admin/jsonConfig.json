@@ -86,7 +86,11 @@
                     "oid": "options.allowNewDevices",
                     "control": "switch",
                     "foreign": false,
-                    "xs": 12
+                    "xs": 12,
+                    "sm": 12,
+                    "md": 12,
+                    "lg": 12,
+                    "xl": 12
                 },
                 "_discoveryHelp": {
                     "type": "staticText",
@@ -94,7 +98,11 @@
                     "xs": 12,
                     "style": {
                         "fontSize": 12
-                    }
+                    },
+                    "sm": 12,
+                    "md": 12,
+                    "lg": 12,
+                    "xl": 12
                 }
             }
         }
