@@ -15,13 +15,18 @@ import type { Translations } from "iobroker-react/i18n";
 import React from "react";
 import ReactDOM from "react-dom";
 
-const useStyles = makeStyles((_theme: Theme) =>
+const useStyles = makeStyles((theme: Theme) =>
 	createStyles({
 		root: {
-			// display: "flex",
-			// flexGrow: 1,
-			// flexFlow: "column nowrap",
-			// gap: theme.spacing(8),
+			width: "100%",
+			minWidth: 0,
+			// SettingsApp already supplies horizontal padding.
+			padding: theme.spacing(2, 0),
+		},
+		controlLabel: {
+			marginLeft: 0,
+			marginRight: 0,
+			maxWidth: "100%",
 		},
 	}),
 );
@@ -54,8 +59,8 @@ const SettingsPageContent: React.FC = React.memo(() => {
 
 	return (
 		<div className={classes.root}>
-			<Grid container spacing={8}>
-				<Grid item xs={4}>
+			<Grid container spacing={2}>
+				<Grid item xs={12} sm={6} md={4}>
 					<TextField
 						label={_("Use remote server:")}
 						fullWidth={true}
@@ -76,7 +81,7 @@ const SettingsPageContent: React.FC = React.memo(() => {
 					</Typography>
 				</Grid>
 
-				<Grid item xs={4}>
+				<Grid item xs={12} sm={6} md={4}>
 					<TextField
 						label={_("Select device:")}
 						inputProps={{
@@ -102,7 +107,7 @@ const SettingsPageContent: React.FC = React.memo(() => {
 					</Typography>
 				</Grid>
 
-				<Grid item xs={4}>
+				<Grid item xs={12} sm={6} md={4}>
 					<TextField
 						label={_("RSSI update interval [ms]:")}
 						inputProps={{
@@ -128,7 +133,7 @@ const SettingsPageContent: React.FC = React.memo(() => {
 					</Typography>
 				</Grid>
 
-				<Grid item xs={6}>
+				<Grid item xs={12} sm={6}>
 					<TextField
 						label={_("Monitored services, * for all services:")}
 						multiline={true}
@@ -147,7 +152,7 @@ const SettingsPageContent: React.FC = React.memo(() => {
 					</Typography>
 				</Grid>
 
-				<Grid item xs={6}>
+				<Grid item xs={12} sm={6}>
 					<TextField
 						label={_("Active plugins:")}
 						multiline={true}
@@ -164,8 +169,9 @@ const SettingsPageContent: React.FC = React.memo(() => {
 					</Typography>
 				</Grid>
 
-				<Grid item xs={6}>
+				<Grid item xs={12} sm={6}>
 					<FormControlLabel
+						className={classes.controlLabel}
 						label={_(
 							"Allow creation of devices without advertised data",
 						)}
@@ -180,8 +186,9 @@ const SettingsPageContent: React.FC = React.memo(() => {
 					/>
 				</Grid>
 
-				<Grid item xs={6}>
+				<Grid item xs={12} sm={6}>
 					<FormControlLabel
+						className={classes.controlLabel}
 						label={_("Accept new devices")}
 						control={
 							<Checkbox

@@ -94,6 +94,7 @@ No `NPM_TOKEN` secret is needed. The deploy job has `id-token: write` for npm au
 	### __WORK IN PROGRESS__
 -->
 ### __WORK IN PROGRESS__
+* Make the adapter settings responsive on phones, tablets, and desktop screens.
 * **BREAKING:** Rename the maintained fork to `iobroker.ble2` with the `ble2` adapter namespace.
 * **BREAKING:** Require Node.js 22.19 or newer; test Node.js 22, 24, and 26 on Linux, Windows, and macOS.
 * Added BTHome signed counters, signed power, volume storage, and direction measurements.
