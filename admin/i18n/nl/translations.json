@@ -1,0 +1,15 @@
+{
+    "Accept new devices": "Nieuwe apparaten accepteren",
+    "Active plugins:": "Actieve plugins:",
+    "Allow creation of devices without advertised data": "Maken van apparaten zonder geadverteerde gegevens toestaan",
+    "Monitored services, * for all services:": "Gecontroleerd diensten, * voor alle diensten:",
+    "On linux this can be determined with `hciconfig`:": "Op linux kan dit vastgesteld worden met `hciconfig`:",
+    "Plugin names, comma separated.": "Plug-namen, komma ' s gescheiden.",
+    "RSSI update interval [ms]:": "RSSI update-interval [ms]:",
+    "Select device:": "Selecteer apparaat:",
+    "Service characteristics as HEX codes or UUID, comma separated.": "Service kenmerken als HEX-codes of UUID door komma ' s gescheiden.",
+    "This will be automatically disabled after 5 minutes.": "Dit wordt automatisch uitgeschakeld na 5 minuten.",
+    "Too frequent updates can slow down the admin.": "Te frequente updates kunnen vertragen de admin.",
+    "Use remote server:": "Externe server gebruiken:",
+    "when configured, the local bluetooth adapter is not used": "Indien ingesteld, wordt de lokale Bluetooth-adapter niet gebruikt"
+}

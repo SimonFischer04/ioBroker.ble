@@ -1,0 +1,15 @@
+{
+    "Accept new devices": "Accetta nuovi dispositivi",
+    "Active plugins:": "Attiva plugin:",
+    "Allow creation of devices without advertised data": "Consenti la creazione di dispositivi senza dati pubblicizzati",
+    "Monitored services, * for all services:": "Servizi monitorati, * per tutti i servizi:",
+    "On linux this can be determined with `hciconfig`:": "Su linux, questo può essere determinato con `hciconfig`:",
+    "Plugin names, comma separated.": "Plugin nomi, separati da virgola.",
+    "RSSI update interval [ms]:": "RSSI intervallo di aggiornamento [ms]:",
+    "Select device:": "Selezionare il dispositivo:",
+    "Service characteristics as HEX codes or UUID, comma separated.": "Caratteristiche del servizio come codici ESADECIMALI o l'UUID, separati da virgola.",
+    "This will be automatically disabled after 5 minutes.": "Questo verrà automaticamente disabilitato dopo 5 minuti.",
+    "Too frequent updates can slow down the admin.": "Aggiornamenti troppo frequenti possono rallentare l'admin.",
+    "Use remote server:": "Usa server remoto:",
+    "when configured, the local bluetooth adapter is not used": "Se configurato, l’adattatore Bluetooth locale non viene utilizzato"
+}

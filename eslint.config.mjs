@@ -1,4 +1,4 @@
-import config, { reactConfig } from "@iobroker/eslint-config";
+import config from "@iobroker/eslint-config";
 
 const [, jsdocOptions] = config.findLast(
 	(entry) => entry.rules?.["jsdoc/require-jsdoc"],
@@ -32,10 +32,7 @@ export default [
 			},
 		},
 	},
-	...reactConfig.map((entry) => ({
-		...entry,
-		files: ["admin/src/**/*.{ts,tsx}"],
-	})),
+
 	{
 		files: ["**/*.test.ts"],
 		// src/tsconfig.json deliberately excludes unit tests from compilation.
@@ -55,22 +52,12 @@ export default [
 		},
 	},
 	{
-		files: ["**/*.ts", "**/*.tsx"],
+		files: ["**/*.ts"],
 		rules: {
 			// The adapter is compiled to CommonJS and uses typed import assignments.
 			"@typescript-eslint/no-require-imports": [
 				"error",
 				{ allowAsImport: true },
-			],
-		},
-	},
-	{
-		files: ["admin/src/**/*.tsx"],
-		rules: {
-			// The admin bundler loads translation JSON via require().
-			"@typescript-eslint/no-require-imports": [
-				"error",
-				{ allow: ["\\.json$"] },
 			],
 		},
 	},

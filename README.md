@@ -35,11 +35,13 @@ The new adapter creates its own objects and states under `ble2.<instance>.*`. Ex
 Remote scanner command-line flags and the TCP protocol are unchanged. For scanner configuration supplied through environment variables, rename the `IOB_BLE_` prefix to `IOB_BLE2_`.
 
 ## Plugin system
-Build the adapter from source with `npm ci` followed by `npm run build`. The generated `build/` and `admin/build/` directories are not tracked in Git. Published npm packages include the generated files; installation directly from Git is disabled with `common.nogit`.
+Build the adapter from source with `npm ci` followed by `npm run build`. The generated backend `build/` directory is not tracked in Git. Published npm packages include the generated files; installation directly from Git is disabled with `common.nogit`.
 
 For a standalone remote scanner, `npm run build:server` generates `bin/blerp.js`. This generated bundle is also ignored by Git; it loads the installed `@stoprocent/noble` driver at runtime.
 
-Run `npm run lint` to check the adapter, React admin UI, tests, and JavaScript helpers using the shared ioBroker ESLint configuration. Use `npm run lint -- --fix` to apply automatic fixes.
+The admin interface is provided by ioBroker JSONConfig (`admin/jsonConfig.json`) and requires admin 7.6.20 or newer. It has no separate frontend build. Existing instance settings retain the same names and types; **Accept new devices** controls the live `options.allowNewDevices` state and still resets after five minutes.
+
+Run `npm run lint` to check the adapter, tests, and JavaScript helpers using the shared ioBroker ESLint configuration. Use `npm run lint -- --fix` to apply automatic fixes.
 
 The adapter supports extension via plugins. Those define which advertised services should be listened to and how to translate the data. The plugin structure is defined in https://github.com/SimonFischer04/ioBroker.ble2/blob/master/src/plugins/plugin.ts and an example of a working plugin is defined here https://github.com/SimonFischer04/ioBroker.ble2/blob/master/src/plugins/_default.ts
 
@@ -84,7 +86,7 @@ After that initial publication, configure a GitHub Actions trusted publisher in 
 
 The npm account configuring this must have publish rights for `iobroker.ble2`. The package's `repository.url` must match the repository running the release workflow; update both the npm publisher settings and this field if publishing from another repository.
 
-For an intended release, update `package.json` and `io-package.json` to the new version, merge the release changes, and push the matching `v<version>` tag to run the checks, build, and publish jobs. The Git tag does not rewrite the version in these files. Use `npm version <version> --no-git-tag-version` to update `package.json` and `package-lock.json`, then set `common.version` in `io-package.json` to the same value before committing. Each npm version must be new; changing the npm dist-tag does not allow an existing version to be published again. The deploy action uses Node.js 24 and updates npm to version 11 for OIDC authentication. It builds the adapter and admin bundles before publication. Pre-release tags such as `v1.0.0-beta.0` publish under the npm `next` dist-tag.
+For an intended release, update `package.json` and `io-package.json` to the new version, merge the release changes, and push the matching `v<version>` tag to run the checks, build, and publish jobs. The Git tag does not rewrite the version in these files. Use `npm version <version> --no-git-tag-version` to update `package.json` and `package-lock.json`, then set `common.version` in `io-package.json` to the same value before committing. Each npm version must be new; changing the npm dist-tag does not allow an existing version to be published again. The deploy action uses Node.js 24 and updates npm to version 11 for OIDC authentication. It builds the adapter before publication and includes JSONConfig and its translations in the npm package. Pre-release tags such as `v1.0.0-beta.0` publish under the npm `next` dist-tag.
 
 No `NPM_TOKEN` secret is needed. The deploy job has `id-token: write` for npm authentication and `contents: write` for creating the GitHub release. Pull requests run the checks and tests and skip publishing. Verify the first intended release succeeds before removing any old npm publish token.
 
@@ -94,6 +96,7 @@ No `NPM_TOKEN` secret is needed. The deploy job has `id-token: write` for npm au
 	### __WORK IN PROGRESS__
 -->
 ### __WORK IN PROGRESS__
+* Replace the custom React settings page with responsive native JSONConfig (requires admin 7.6.20 or newer), preserving settings and the live discovery switch.
 * **BREAKING:** Rename the maintained fork to `iobroker.ble2` with the `ble2` adapter namespace.
 * **BREAKING:** Require Node.js 22.19 or newer; test Node.js 22, 24, and 26 on Linux, Windows, and macOS.
 * Added BTHome signed counters, signed power, volume storage, and direction measurements.
