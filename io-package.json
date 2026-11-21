@@ -1,8 +1,21 @@
 {
 	"common": {
 		"name": "ble2",
-		"version": "0.14.1",
+		"version": "0.14.2-beta.1",
 		"news": {
+			"0.14.2-beta.1": {
+				"en": "Prerelease to verify npm Trusted Publishing for the maintained ble2 adapter.",
+				"de": "Vorabversion zur Überprüfung von npm Trusted Publishing für den gepflegten ble2-Adapter.",
+				"ru": "Предварительная версия для проверки npm Trusted Publishing для поддерживаемого адаптера ble2.",
+				"pt": "Pré-lançamento para verificar o npm Trusted Publishing do adaptador ble2 mantido.",
+				"nl": "Voorlopige versie om npm Trusted Publishing voor de onderhouden ble2-adapter te verifiëren.",
+				"fr": "Préversion pour vérifier npm Trusted Publishing pour l’adaptateur ble2 maintenu.",
+				"it": "Versione preliminare per verificare npm Trusted Publishing per l’adattatore ble2 mantenuto.",
+				"es": "Versión preliminar para verificar npm Trusted Publishing para el adaptador ble2 mantenido.",
+				"pl": "Wersja wstępna do weryfikacji npm Trusted Publishing dla rozwijanego adaptera ble2.",
+				"uk": "Попередня версія для перевірки npm Trusted Publishing для підтримуваного адаптера ble2.",
+				"zh-cn": "用于验证持续维护的 ble2 适配器的 npm Trusted Publishing 的预发布版本。"
+			},
 			"0.14.1": {
 				"en": "Fixed compatibility issues with newer OS and Node.js versions (#874)",
 				"de": "Kompatibilitätsprobleme mit neueren Betriebssystem- und Node.js-Versionen behoben (#874)",

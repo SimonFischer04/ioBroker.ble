@@ -84,7 +84,7 @@ After that initial publication, configure a GitHub Actions trusted publisher in 
 
 The npm account configuring this must have publish rights for `iobroker.ble2`. The package's `repository.url` must match the repository running the release workflow; update both the npm publisher settings and this field if publishing from another repository.
 
-For an intended release, update `package.json` and `io-package.json` to the new version, merge the release changes, and push the matching `v<version>` tag to run the checks, build, and publish jobs. The deploy action uses Node.js 24 and updates npm to version 11 for OIDC authentication. It builds the adapter and admin bundles before publication. Pre-release tags such as `v1.0.0-beta.0` publish under the npm `next` dist-tag.
+For an intended release, update `package.json` and `io-package.json` to the new version, merge the release changes, and push the matching `v<version>` tag to run the checks, build, and publish jobs. The Git tag does not rewrite the version in these files. Use `npm version <version> --no-git-tag-version` to update `package.json` and `package-lock.json`, then set `common.version` in `io-package.json` to the same value before committing. Each npm version must be new; changing the npm dist-tag does not allow an existing version to be published again. The deploy action uses Node.js 24 and updates npm to version 11 for OIDC authentication. It builds the adapter and admin bundles before publication. Pre-release tags such as `v1.0.0-beta.0` publish under the npm `next` dist-tag.
 
 No `NPM_TOKEN` secret is needed. The deploy job has `id-token: write` for npm authentication and `contents: write` for creating the GitHub release. Pull requests run the checks and tests and skip publishing. Verify the first intended release succeeds before removing any old npm publish token.
 
@@ -99,6 +99,9 @@ No `NPM_TOKEN` secret is needed. The deploy job has `id-token: write` for npm au
 * Added BTHome signed counters, signed power, volume storage, and direction measurements.
 * Fixed discovery and decoding of Ruuvi Tag manufacturer-only advertisements, including packets received after empty or unrelated frames.
 * Ignore invalid Mi Flora soil moisture readings above 100% to preserve the last valid measurement.
+
+### 0.14.2-beta.1 (2026-11-21)
+* Prepare a fresh prerelease version to verify npm Trusted Publishing.
 
 ### 0.14.1 (2025-02-09)
 * Fixed compatibility issues with newer OS and Node.js versions (#874)
