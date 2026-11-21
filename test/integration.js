@@ -58,8 +58,12 @@ tests.integration(adapterDir, {
 				const harness = getHarness();
 				const original = await harness.getAdapterConfig();
 				let scannerSocket;
+				let scannerError;
 				const server = createServer((client) => {
 					scannerSocket = client;
+					client.on("error", (error) => {
+						scannerError = error;
+					});
 				});
 				await new Promise((resolve, reject) => {
 					server.once("error", reject);
@@ -170,6 +174,13 @@ tests.integration(adapterDir, {
 						}
 					}
 				} finally {
+					// Finish TCP before terminating the peer process (Windows otherwise resets it).
+					if (scannerSocket && !scannerSocket.destroyed) {
+						await new Promise((resolve) => {
+							scannerSocket.once("close", resolve);
+							scannerSocket.end();
+						});
+					}
 					await harness.stopAdapter();
 					scannerSocket?.destroy();
 					await new Promise((resolve) => server.close(resolve));
@@ -179,6 +190,7 @@ tests.integration(adapterDir, {
 						});
 					}
 				}
+				assert.ifError(scannerError);
 			});
 		});
 	},
