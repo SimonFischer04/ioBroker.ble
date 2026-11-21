@@ -59,7 +59,7 @@ let socket: Socket | undefined;
 
 // Adapter-Objekt erstellen
 const adapter = utils.adapter({
-	name: "ble",
+	name: "ble2",
 	// is called when databases are connected and adapter received configuration.
 	// start here!
 	ready: async () => {
