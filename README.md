@@ -59,6 +59,13 @@ If you have any device transmitting specially encoded information via advertisem
 * `"mi-flora"`: Original plugin for the flower care plant sensor, now aliased to `"xiaomi"`
 * `"ruuvi-tag"`: [Ruuvi Tag](https://tag.ruuvi.com/) multisensor with firmware versions v1 and v2. **Untested, please give feedback!** 
 * `"bthome"`: Sensors using the [BTHome](https://bthome.io) protocol. For now this is limited to the `v2` revision of the protocol and does not support encrypted packets.
+* `"mopeka"`: Mopeka Pro Check LPG tank sensors (standard sensor type `0x03`).
+
+For Mopeka, add `mopeka` to **Active plugins** and enable **Accept new devices** while discovering the sensor. Local scanning includes its manufacturer identifier automatically. A remote scanner with service filters also needs `--manufacturerIds 89` to forward manufacturer-only advertisements.
+
+The plugin creates `mopeka_level_raw` (uncalibrated ultrasonic reading), `mopeka_temperature` (°C), `mopeka_battery_v` (V), `mopeka_battery_percent` (CR2032 estimate), and `mopeka_reading_quality` (0: no valid echo, 1: low, 2: medium, 3: high). A reading with quality 0 clears the raw level to `null`; battery and temperature still update. Converting the raw reading to fill percentage, volume, or weight requires calibration for the tank and its contents.
+
+The standard Pro Check layout is verified against [ESPHome](https://github.com/esphome/esphome/blob/dev/esphome/components/mopeka_pro_check/mopeka_pro_check.cpp) and [mopeka-iot-ble](https://github.com/Bluetooth-Devices/mopeka-iot-ble/blob/main/src/mopeka_iot_ble/parser.py). Other Mopeka sensor types are not handled by this plugin.
 
 ## Publishing releases
 
@@ -99,6 +106,7 @@ No `NPM_TOKEN` secret is needed. The deploy job has `id-token: write` for npm au
 * **BREAKING:** Require js-controller 7.2.2 or newer; update adapter-core and release tools, repository metadata, and Dependabot configuration.
 -->
 ### __WORK IN PROGRESS__
+* Add Mopeka Pro Check support with raw level, temperature, battery, and reading quality states.
 * Replace the custom React settings page with responsive native JSONConfig (requires admin 7.6.20 or newer), preserving settings and the live discovery switch.
 * **BREAKING:** Rename the maintained fork to `iobroker.ble2` with the `ble2` adapter namespace.
 * **BREAKING:** Require Node.js 22.19 or newer; test Node.js 22, 24, and 26 on Linux, Windows, and macOS.
