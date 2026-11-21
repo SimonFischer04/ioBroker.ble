@@ -6,12 +6,18 @@ export function createGlobalMock(
 	adapterOptions: Partial<ioBroker.AdapterOptions>,
 ) {
 	const { adapter, database: db } = utils.unit.createMocks(adapterOptions);
+	const adapterWithTimers = Object.assign(adapter, {
+		setTimeout: (callback: () => void, timeout: number) =>
+			setTimeout(callback, timeout) as unknown as ioBroker.Timeout,
+		clearTimeout: (timer: ioBroker.Timeout | undefined) =>
+			clearTimeout(timer as unknown as NodeJS.Timeout | undefined),
+	});
 
 	const ret = {
 		Global: {
 			database: db,
 			log: stub(),
-			adapter,
+			adapter: adapterWithTimers,
 			async $$(
 				pattern: string,
 				type: ioBroker.ObjectType,

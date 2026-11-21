@@ -1,12 +1,19 @@
 version: 2
 updates:
-- package-ecosystem: npm
-  directory: "/"
-  schedule:
-    interval: monthly
-    time: "04:00"
-    timezone: Europe/Berlin
-  open-pull-requests-limit: 7
-  assignees:
-  - AlCalzone
-  versioning-strategy: increase
+    - package-ecosystem: npm
+      directory: "/"
+      schedule:
+          interval: monthly
+          time: "04:00"
+          timezone: Europe/Berlin
+      open-pull-requests-limit: 7
+      cooldown:
+          default-days: 7
+      ignore:
+          - dependency-name: "@types/node"
+            update-types: ["version-update:semver-major"]
+      versioning-strategy: increase
+    - package-ecosystem: github-actions
+      directory: "/"
+      schedule:
+          interval: monthly

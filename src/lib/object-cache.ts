@@ -25,7 +25,7 @@ export class ObjectCache {
 		undefined,
 		compareExpireTimestamp,
 	);
-	private expireTimer: NodeJS.Timeout | undefined;
+	private expireTimer: ioBroker.Timeout | undefined;
 
 	/**
 	 * Retrieves an object from the cache or queries the database if it is not cached yet
@@ -83,7 +83,7 @@ export class ObjectCache {
 		this.expireTimestamps.add(newTimestamp);
 		// if no expiry timer is running, start one
 		if (this.expireTimer == null) {
-			this.expireTimer = setTimeout(
+			this.expireTimer = _.adapter.setTimeout(
 				() => this.expire(),
 				this.expiryDuration,
 			);
@@ -113,7 +113,7 @@ export class ObjectCache {
 
 		const nextTimestamp = this.expireTimestamps.peekStart()!;
 		const timeDelta = nextTimestamp.timestamp - Date.now();
-		this.expireTimer = setTimeout(
+		this.expireTimer = _.adapter.setTimeout(
 			() => this.expire(),
 			Math.max(timeDelta, 100),
 		);
@@ -139,7 +139,7 @@ export class ObjectCache {
 
 	public dispose(): void {
 		if (this.expireTimer != undefined) {
-			clearTimeout(this.expireTimer);
+			_.adapter.clearTimeout(this.expireTimer);
 			this.expireTimer = undefined;
 		}
 		this.cache.clear();

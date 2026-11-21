@@ -1,6 +1,11 @@
 /** noble-Treiber-Instanz */
 import type * as Noble from "@stoprocent/noble";
-import { createServer, type AddressInfo, type Server, type Socket } from "net";
+import {
+	createServer,
+	type AddressInfo,
+	type Server,
+	type Socket,
+} from "node:net";
 import { pick } from "./lib/misc";
 import { matchesScanFilter } from "./lib/scan-filter";
 import {

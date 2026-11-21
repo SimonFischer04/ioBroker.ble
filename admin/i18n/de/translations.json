@@ -11,5 +11,6 @@
     "This will be automatically disabled after 5 minutes.": "Dies wird nach 5 Minuten automatisch deaktiviert.",
     "Too frequent updates can slow down the admin.": "Zu häufige Updates können den Admin verlangsamen.",
     "Use remote server:": "Remote-Server verwenden:",
-    "when configured, the local bluetooth adapter is not used": "Wenn konfiguriert, wird der lokale Bluetooth-Adapter nicht verwendet"
+    "when configured, the local bluetooth adapter is not used": "Wenn konfiguriert, wird der lokale Bluetooth-Adapter nicht verwendet",
+    "address:port": "Adresse:Port"
 }

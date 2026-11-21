@@ -11,5 +11,6 @@
     "This will be automatically disabled after 5 minutes.": "这将在 5 分钟后自动禁用。",
     "Too frequent updates can slow down the admin.": "太频繁地更新可以慢下来的管理。",
     "Use remote server:": "使用远程服务器：",
-    "when configured, the local bluetooth adapter is not used": "配置后将不使用本地蓝牙适配器"
+    "when configured, the local bluetooth adapter is not used": "配置后将不使用本地蓝牙适配器",
+    "address:port": "地址:端口"
 }
