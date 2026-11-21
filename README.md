@@ -1,7 +1,7 @@
 <img src="admin/ble2.png" height="48" /> ioBroker.ble2
 =================
 
-[![Test and Release](https://github.com/SimonFischer04/ioBroker.ble/actions/workflows/test-and-release.yml/badge.svg)](https://github.com/SimonFischer04/ioBroker.ble/actions/workflows/test-and-release.yml)
+[![Test and Release](https://github.com/SimonFischer04/ioBroker.ble2/actions/workflows/test-and-release.yml/badge.svg)](https://github.com/SimonFischer04/ioBroker.ble2/actions/workflows/test-and-release.yml)
 [![npm version](https://img.shields.io/npm/v/iobroker.ble2.svg)](https://www.npmjs.com/package/iobroker.ble2)
 
 This is SimonFischer04's maintained fork of [ioBroker.ble](https://github.com/AlCalzone/ioBroker.ble), published independently as `iobroker.ble2`. The original authors and MIT license are retained.
@@ -41,7 +41,7 @@ For a standalone remote scanner, `npm run build:server` generates `bin/blerp.js`
 
 Run `npm run lint` to check the adapter, React admin UI, tests, and JavaScript helpers using the shared ioBroker ESLint configuration. Use `npm run lint -- --fix` to apply automatic fixes.
 
-The adapter supports extension via plugins. Those define which advertised services should be listened to and how to translate the data. The plugin structure is defined in https://github.com/SimonFischer04/ioBroker.ble/blob/master/src/plugins/plugin.ts and an example of a working plugin is defined here https://github.com/SimonFischer04/ioBroker.ble/blob/master/src/plugins/_default.ts
+The adapter supports extension via plugins. Those define which advertised services should be listened to and how to translate the data. The plugin structure is defined in https://github.com/SimonFischer04/ioBroker.ble2/blob/master/src/plugins/plugin.ts and an example of a working plugin is defined here https://github.com/SimonFischer04/ioBroker.ble2/blob/master/src/plugins/_default.ts
 
 Plugins can also declare `manufacturerIds`, an optional list of Bluetooth company identifiers, to receive manufacturer data from devices that do not advertise a matching service. The Ruuvi Tag plugin uses company identifier `0x0499`. When running a remote scanner, include `--manufacturerIds 1177` alongside its service filters to receive these packets.
 
@@ -58,7 +58,7 @@ If you have any device transmitting specially encoded information via advertisem
 
 ## Publishing releases
 
-The npm package is `iobroker.ble2`; its ioBroker adapter name is `ble2`. The GitHub repository remains `SimonFischer04/ioBroker.ble`.
+The npm package is `iobroker.ble2`; its ioBroker adapter name is `ble2`. The GitHub repository is `SimonFischer04/ioBroker.ble2`.
 
 For the first publication of this new package, sign in to npm with your own account and build and verify the package locally:
 
@@ -78,7 +78,7 @@ After that initial publication, configure a GitHub Actions trusted publisher in 
 | npm setting | Value for this fork |
 | --- | --- |
 | Organization or user | `SimonFischer04` |
-| Repository | `ioBroker.ble` |
+| Repository | `ioBroker.ble2` |
 | Workflow filename | `test-and-release.yml` |
 | Environment | Leave blank |
 

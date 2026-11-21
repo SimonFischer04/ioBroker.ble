@@ -23,7 +23,7 @@
     },
     "zuvielx9 (https://github.com/zuvielx9)"
   ],
-  "homepage": "https://github.com/SimonFischer04/ioBroker.ble",
+  "homepage": "https://github.com/SimonFischer04/ioBroker.ble2",
   "license": "MIT",
   "keywords": [
     "ioBroker",
@@ -33,7 +33,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/SimonFischer04/ioBroker.ble"
+    "url": "https://github.com/SimonFischer04/ioBroker.ble2"
   },
   "engines": {
     "node": ">=22.19"
@@ -107,7 +107,7 @@
     "build:server": "esbuild src/scanProcess.ts --bundle --main-fields=main --outfile=bin/blerp.js --platform=node --format=cjs --target=node14.18 --external:@stoprocent/noble"
   },
   "bugs": {
-    "url": "https://github.com/SimonFischer04/ioBroker.ble/issues"
+    "url": "https://github.com/SimonFischer04/ioBroker.ble2/issues"
   },
   "nyc": {
     "all": true,
